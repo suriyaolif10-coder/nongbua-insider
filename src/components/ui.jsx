@@ -1,23 +1,38 @@
 import { useState } from 'react'
 
-export function MountainLogo({ className = 'h-8 w-8' }) {
+// โลโก้ภูเขา 2 ยอด (ตามโลโก้ หนองบัว INSIDER)
+export function MountainLogo({ className = 'h-8 w-8', color = '#ff6a00' }) {
   return (
-    <svg viewBox="0 0 48 40" className={className} aria-hidden="true">
-      <path d="M2 38 17 12l7 10 5-7 17 23z" fill="#ff6a00" />
-      <path d="M17 12l4.5 6.4-2.6 2.4-1.9-2.6-2.7 3.4-1.8-1.6z" fill="#fff" opacity=".9" />
-      <circle cx="37" cy="7" r="4" fill="#ff6a00" />
+    <svg viewBox="0 0 527 282" className={className} aria-hidden="true">
+      <path
+        fill={color}
+        fillRule="evenodd"
+        d="M0 282 162 70 240 143 337 0 527 282Z M95 238 167 140 210 190 178 238Z M325 85 340 80 442 238 417 238Z"
+      />
+    </svg>
+  )
+}
+
+// ไอคอนภูเขาแบบเส้น (ใช้ใน Hero)
+export function MountainOutline({ className = 'h-6 w-10' }) {
+  return (
+    <svg viewBox="0 0 60 30" className={className} fill="none" stroke="#ff6a00" strokeWidth="2.4" strokeLinejoin="round" aria-hidden="true">
+      <path d="M2 28 17 8l7 7 10-13 24 26z" />
+      <path d="M12 21l5-6 3 3" />
     </svg>
   )
 }
 
 export function Brand({ size = 'md' }) {
-  const text = size === 'lg' ? 'text-2xl' : 'text-xl'
+  const lg = size === 'lg'
   return (
-    <span className={`flex items-center gap-2 font-display font-bold leading-none ${text}`}>
-      <MountainLogo className={size === 'lg' ? 'h-10 w-10' : 'h-8 w-9'} />
-      <span>
+    <span className={`flex items-center gap-2.5 font-display font-bold leading-none ${lg ? 'text-2xl' : 'text-[19px] sm:text-xl'}`}>
+      <span className={`grid shrink-0 place-items-center rounded-xl bg-ink-800 ${lg ? 'h-12 w-12' : 'h-10 w-10'}`}>
+        <MountainLogo className={lg ? 'h-6 w-9' : 'h-5 w-8'} />
+      </span>
+      <span className="whitespace-nowrap">
         <span className="text-white">หนองบัว</span>{' '}
-        <span className="text-brand tracking-wide">INSIDER</span>
+        <span className="tracking-wide text-brand">INSIDER</span>
       </span>
     </span>
   )
@@ -29,7 +44,7 @@ export function SafeImg({ src, alt = '', className = '' }) {
   if (!src || broken) {
     return (
       <div className={`flex items-center justify-center bg-gradient-to-br from-ink-700 to-ink-900 ${className}`}>
-        <MountainLogo className="h-1/3 max-h-16 w-1/3 max-w-16 opacity-40" />
+        <MountainLogo className="h-1/4 max-h-12 w-1/3 max-w-20 opacity-40" />
       </div>
     )
   }

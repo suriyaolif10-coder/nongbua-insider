@@ -22,18 +22,18 @@ export default function Header({ activeTab = 'top', search, onSearch }) {
 
   return (
     <header className="sticky top-0 z-40 bg-black/95 backdrop-blur">
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4">
+      <div className="mx-auto flex h-[68px] max-w-6xl items-center justify-between gap-3 px-4">
         <Link to="/" aria-label="หนองบัว INSIDER หน้าแรก"><Brand /></Link>
         <div className="flex items-center gap-2">
           <button
             aria-label="ค้นหา"
             onClick={() => { setSearchOpen((v) => !v); if (searchOpen) onSearch?.('') }}
-            className="grid h-10 w-10 place-items-center rounded-full text-white transition hover:bg-white/10"
+            className="grid h-11 w-11 place-items-center rounded-full text-white transition hover:bg-white/10"
           >
-            {searchOpen ? <Icon.Close className="h-5 w-5" /> : <Icon.Search className="h-5 w-5" />}
+            {searchOpen ? <Icon.Close className="h-6 w-6" /> : <Icon.Search className="h-6 w-6" />}
           </button>
           {/* ปุ่มเพิ่มข่าว -> ไปหน้า Login หลังบ้าน */}
-          <button onClick={() => navigate('/admin/login')} className="btn-brand whitespace-nowrap px-4 py-2">
+          <button onClick={() => navigate('/admin/login')} className="btn-brand whitespace-nowrap px-4 py-2.5 text-[15px] font-bold">
             <span className="text-base leading-none">+</span> เพิ่มข่าว
           </button>
         </div>
@@ -54,17 +54,17 @@ export default function Header({ activeTab = 'top', search, onSearch }) {
       {/* แถบแท็บ */}
       <nav className="relative border-b border-white/10">
         <div className="mx-auto flex max-w-6xl items-stretch">
-          <div className="no-scrollbar flex flex-1 overflow-x-auto px-2">
+          <div className="no-scrollbar flex flex-1 overflow-x-auto px-1 sm:px-0">
             {TABS.map((t) => {
               const active = activeTab === t.key
               return (
                 <Link
                   key={t.key}
                   to={tabHref(t.key)}
-                  className={`relative shrink-0 px-3 py-3 text-sm transition ${active ? 'font-semibold text-white' : 'text-neutral-400 hover:text-white'}`}
+                  className={`relative shrink-0 px-3 py-3.5 text-base transition sm:px-4 ${active ? 'font-display font-bold text-white' : 'text-neutral-400 hover:text-white'}`}
                 >
                   {t.label}
-                  {active && <span className="absolute inset-x-3 bottom-0 h-[3px] rounded-full bg-brand" />}
+                  {active && <span className="absolute inset-x-0 bottom-0 h-[3px] rounded-full bg-brand" />}
                 </Link>
               )
             })}
@@ -73,7 +73,7 @@ export default function Header({ activeTab = 'top', search, onSearch }) {
             aria-label="เมนูทั้งหมด"
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen((v) => !v)}
-            className="grid w-11 shrink-0 place-items-center border-l border-white/10 bg-black text-neutral-300 hover:text-white"
+            className="my-2 grid w-12 shrink-0 place-items-center border-l border-white/15 bg-black text-neutral-200 hover:text-white"
           >
             <Icon.Chevron className={`h-5 w-5 transition ${menuOpen ? 'rotate-180' : ''}`} />
           </button>

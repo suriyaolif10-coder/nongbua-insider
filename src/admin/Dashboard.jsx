@@ -162,13 +162,14 @@ function Stats() {
 function Settings() {
   useCollection('app_config')
   const cfg = db.config()
-  const [form, setForm] = useState({ promptpay_number: cfg.promptpay_number || '', repo_url: cfg.repo_url || GITHUB_URL })
+  const pick = (c) => ({ promptpay_number: c.promptpay_number || '', repo_url: c.repo_url || GITHUB_URL, hero_image_url: c.hero_image_url || '' })
+  const [form, setForm] = useState(() => pick(cfg))
   const [saved, setSaved] = useState(false)
   const [touched, setTouched] = useState(false)
   // โหมด Supabase: เติมค่าจากฐานข้อมูลเมื่อโหลดเสร็จ (ถ้ายังไม่ได้แก้ฟอร์ม)
   useEffect(() => {
-    if (!touched) setForm({ promptpay_number: cfg.promptpay_number || '', repo_url: cfg.repo_url || GITHUB_URL })
-  }, [cfg.promptpay_number, cfg.repo_url]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (!touched) setForm(pick(cfg))
+  }, [cfg.promptpay_number, cfg.repo_url, cfg.hero_image_url]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const submit = (e) => {
     e.preventDefault()
@@ -187,6 +188,16 @@ function Settings() {
           onChange={(e) => setTouched(true) || setForm({ ...form, promptpay_number: e.target.value.replace(/[^\d-]/g, '') })}
           inputMode="numeric"
           placeholder="08x-xxx-xxxx หรือเลขบัตรประชาชน"
+          className="input"
+        />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-neutral-400">รูปพื้นหลัง Hero <span className="text-neutral-600">(hero_image_url)</span></label>
+        <input
+          type="url"
+          value={form.hero_image_url}
+          onChange={(e) => setTouched(true) || setForm({ ...form, hero_image_url: e.target.value })}
+          placeholder="เว้นว่าง = ใช้ภาพภูเขาเริ่มต้น (แนะนำรูปแนวนอน ไม่มีตัวหนังสือ)"
           className="input"
         />
       </div>

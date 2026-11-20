@@ -24,6 +24,7 @@ export default function Home() {
 
   const featured = [...filtered].sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0)).slice(0, 5)
   const latest = tab === 'top' && !q ? filtered.slice(0, 10) : filtered
+  const sliderFirst = !q && !['community', 'agency'].includes(tab) && featured.length > 0
   const title = q ? `ผลการค้นหา "${search}"` : isDistrict ? `ข่าว อ.${tab}` : 'ข่าวใหม่ล่าสุด'
 
   return (
@@ -31,7 +32,7 @@ export default function Home() {
       <Header activeTab={tab} search={search} onSearch={setSearch} />
       {tab === 'top' && !q && <Hero />}
 
-      <main className="mx-auto grid max-w-6xl gap-6 px-4 pt-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <main className={`mx-auto grid max-w-6xl gap-6 px-4 lg:grid-cols-[minmax(0,1fr)_320px] ${sliderFirst ? 'pt-0 sm:pt-5' : 'pt-5'}`}>
         <div className="space-y-6">
           {tab === 'community' ? (
             <FbFeed />

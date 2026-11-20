@@ -63,8 +63,10 @@ create table if not exists public.app_config (
   id text primary key default 'config',
   promptpay_number text default '',
   repo_url text default 'https://github.com/suriyaolif10-coder/nongbua-insider',
+  hero_image_url text default '',
   created_at timestamptz not null default now()
 );
+alter table public.app_config add column if not exists hero_image_url text default '';
 
 -- ---------- Row Level Security: ทุกคนอ่านได้ / แอดมินเท่านั้นที่เขียนได้ ----------
 do $$

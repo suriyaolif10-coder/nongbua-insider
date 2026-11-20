@@ -1,21 +1,29 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { SafeImg, Icon, Brand } from './ui.jsx'
+import { SafeImg, Icon, Brand, MountainOutline } from './ui.jsx'
 import { db, useCollection, timeAgo, districtShort, GITHUB_URL } from '../db.js'
 
 export function Hero() {
+  const heroImg = useCollection('app_config')[0]?.hero_image_url || './img/hero-mountain.svg'
   return (
-    <section className="relative overflow-hidden">
-      <img src="./img/hero-mountain.svg" alt="ภูเขาหนองบัวลำภู" className="absolute inset-0 h-full w-full object-cover" />
-      <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/55 to-ink-950" />
-      <div className="relative mx-auto flex max-w-6xl flex-col items-center px-4 py-14 text-center sm:py-20">
-        <h1 className="font-display text-5xl font-extrabold leading-none text-brand drop-shadow-[0_4px_18px_rgba(255,106,0,.35)] sm:text-7xl">
-          หนองบัว <span className="tracking-wide">INSIDER</span>
+    <section className="relative overflow-hidden border-b border-brand/40 bg-black">
+      <img src={heroImg} alt="ภูเขาหนองบัวลำภู" className="absolute inset-0 h-full w-full object-cover object-[70%_center]" />
+      <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/35 to-transparent" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/30" />
+      <div className="relative mx-auto max-w-6xl px-4 py-9 sm:py-16">
+        <h1 className="font-display text-[44px] font-bold leading-[1.05] text-brand drop-shadow-[0_2px_12px_rgba(0,0,0,.6)] min-[400px]:text-5xl sm:text-7xl">
+          หนองบัว INSIDER
         </h1>
-        <p className="mt-4 text-lg font-medium text-white sm:text-2xl">รู้ลึก รู้จริง เรื่องหนองบัวลำภู</p>
-        <p className="mt-3 text-[11px] font-medium tracking-[0.25em] text-neutral-300 sm:text-xs">
-          LOCAL NEWS • NONG BUA LAMPHU • ISAN REGION
+        <p className="mt-1 font-display text-2xl font-semibold text-white drop-shadow-[0_2px_8px_rgba(0,0,0,.7)] min-[400px]:text-[27px] sm:mt-2 sm:text-4xl">
+          รู้ลึก รู้จริง เรื่องหนองบัวลำภู
         </p>
+        <div className="mt-3 h-px w-56 bg-gradient-to-r from-brand to-brand/0 sm:w-80" />
+        <div className="mt-3 flex items-center gap-3">
+          <MountainOutline className="h-5 w-10 shrink-0 sm:h-6 sm:w-12" />
+          <p className="text-[10px] font-medium tracking-wide text-neutral-200 min-[400px]:text-[11px] sm:text-sm">
+            LOCAL NEWS • NONG BUA LAMPHU • ISAN REGION
+          </p>
+        </div>
       </div>
     </section>
   )
@@ -37,9 +45,9 @@ export function NewsSlider({ items }) {
   const go = (d) => setIdx((i) => (i + d + count) % count)
 
   return (
-    <section aria-roledescription="carousel" aria-label="ข่าวเด่น">
+    <section aria-roledescription="carousel" aria-label="ข่าวเด่น" className="-mx-4 sm:mx-0">
       <div
-        className="relative overflow-hidden rounded-2xl bg-ink-800"
+        className="relative overflow-hidden bg-ink-800 sm:rounded-2xl"
         onTouchStart={(e) => (touch.current = e.touches[0].clientX)}
         onTouchEnd={(e) => {
           if (touch.current == null) return
@@ -50,29 +58,32 @@ export function NewsSlider({ items }) {
       >
         <div className="flex transition-transform duration-500 ease-out" style={{ transform: `translateX(-${idx * 100}%)` }}>
           {items.map((n) => (
-            <Link key={n.id} to={`/news/${n.id}`} className="relative block aspect-[4/3] w-full shrink-0 sm:aspect-[16/9]">
+            <Link key={n.id} to={`/news/${n.id}`} className="relative block aspect-[3/2] w-full shrink-0 sm:aspect-[16/9]">
               <SafeImg src={n.image_url} alt={n.title} className="absolute inset-0 h-full w-full" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
-              <span className="absolute left-3 top-3 rounded-md bg-brand px-2.5 py-1 text-xs font-semibold text-white shadow sm:left-4 sm:top-4">
-                {districtShort(n.district)}
-              </span>
-              <div className="absolute inset-x-0 bottom-0 p-4 sm:p-6">
-                <h2 className="line-clamp-3 font-display text-xl font-bold leading-snug text-white sm:text-3xl">{n.title}</h2>
-                <p className="mt-2 text-xs text-neutral-300">{n.source} • {timeAgo(n.created_at)}</p>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/35 to-transparent" />
+              <div className="absolute inset-x-0 bottom-0 px-4 pb-7 sm:px-6 sm:pb-9">
+                <span className="inline-block rounded-full bg-brand px-3.5 py-1 text-sm font-semibold text-white shadow-lg">
+                  {districtShort(n.district)}
+                </span>
+                <h2 className="mt-2 line-clamp-3 font-display text-[22px] font-bold leading-snug text-white drop-shadow-[0_2px_6px_rgba(0,0,0,.8)] sm:text-3xl">
+                  {n.title}
+                </h2>
+                <p className="mt-1.5 text-sm text-neutral-300">{n.source} • {timeAgo(n.created_at)}</p>
               </div>
             </Link>
           ))}
         </div>
-      </div>
-      <div className="mt-3 flex justify-center gap-1.5">
-        {items.map((n, i) => (
-          <button
-            key={n.id}
-            aria-label={`ข่าวที่ ${i + 1}`}
-            onClick={() => setIdx(i)}
-            className={`h-2 rounded-full transition-all ${i === idx ? 'w-6 bg-brand' : 'w-2 bg-neutral-600 hover:bg-neutral-400'}`}
-          />
-        ))}
+        {/* แถบ indicator */}
+        <div className="absolute inset-x-4 bottom-3 flex gap-1.5 sm:inset-x-6">
+          {items.map((n, i) => (
+            <button
+              key={n.id}
+              aria-label={`ข่าวที่ ${i + 1}`}
+              onClick={() => setIdx(i)}
+              className={`h-1 flex-1 rounded-full transition-colors ${i === idx ? 'bg-white' : 'bg-white/35 hover:bg-white/60'}`}
+            />
+          ))}
+        </div>
       </div>
     </section>
   )
@@ -94,10 +105,10 @@ export function AdSlot({ position = 'top', className = '' }) {
 
   if (!ad) {
     return (
-      <div className={`flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-neutral-700 px-4 py-6 text-center ${className}`}>
-        <span className="text-sm font-medium text-neutral-500">พื้นที่โฆษณา</span>
-        <a href={fbPage} target="_blank" rel="noreferrer" className="text-sm font-medium text-brand hover:underline">
-          ลงโฆษณากับหนองบัว INSIDER ติดต่อทางเพจ &gt;
+      <div className={`flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-neutral-700 px-4 py-9 text-center ${className}`}>
+        <span className="font-display text-lg font-semibold text-white">พื้นที่โฆษณา</span>
+        <a href={fbPage} target="_blank" rel="noreferrer" className="text-sm font-semibold text-brand hover:underline">
+          ลงโฆษณากับหนองบัว INSIDER ติดต่อทางเพจ ›
         </a>
       </div>
     )
@@ -119,14 +130,13 @@ export function AdSlot({ position = 'top', className = '' }) {
 
 export function NewsRow({ n }) {
   return (
-    <Link to={`/news/${n.id}`} className="group flex gap-3 rounded-xl bg-ink-900 p-2.5 transition hover:bg-ink-800">
-      <SafeImg src={n.image_url} alt={n.title} className="h-20 w-28 shrink-0 rounded-lg sm:h-24 sm:w-36" />
-      <div className="flex min-w-0 flex-1 flex-col justify-between py-0.5">
-        <div>
-          <span className="text-[11px] font-semibold text-brand">{districtShort(n.district)}</span>
-          <h3 className="line-clamp-2 text-sm font-medium leading-snug text-white group-hover:text-brand sm:text-base">{n.title}</h3>
-        </div>
-        <p className="truncate text-[11px] text-neutral-500">{n.source} • {timeAgo(n.created_at)}</p>
+    <Link to={`/news/${n.id}`} className="group flex gap-3.5 rounded-xl py-1.5 transition sm:p-2 sm:hover:bg-ink-900">
+      <SafeImg src={n.image_url} alt={n.title} className="aspect-[4/3] w-[30%] max-w-[150px] shrink-0 rounded-xl" />
+      <div className="flex min-w-0 flex-1 flex-col justify-center gap-1">
+        <h3 className="line-clamp-2 text-base leading-snug text-neutral-100 group-hover:text-brand sm:text-lg">{n.title}</h3>
+        <p className="truncate text-xs text-neutral-500">
+          <span className="font-semibold text-brand">{districtShort(n.district)}</span> • {n.source} • {timeAgo(n.created_at)}
+        </p>
       </div>
     </Link>
   )
@@ -135,13 +145,13 @@ export function NewsRow({ n }) {
 export function LatestNews({ items, title = 'ข่าวใหม่ล่าสุด' }) {
   return (
     <section>
-      <h2 className="mb-3 flex items-center gap-2 font-display text-xl font-bold text-white">
+      <h2 className="mb-3 flex items-center gap-2 font-display text-2xl font-bold text-white">
         {title} <span aria-hidden="true">⚡</span>
       </h2>
       {items.length === 0 ? (
         <p className="rounded-xl bg-ink-900 p-6 text-center text-sm text-neutral-500">ยังไม่มีข่าวในหมวดนี้</p>
       ) : (
-        <div className="space-y-2.5">
+        <div className="space-y-3">
           {items.map((n, i) => (
             <div key={n.id}>
               <NewsRow n={n} />

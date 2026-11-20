@@ -26,7 +26,7 @@
 | `agency_sites` | name, url, category |
 | `fb_posts` | page_name, embed_url |
 | `ad_banners` | title, image_url, link, position, price (300/500/800), active, views, owner |
-| `app_config` | promptpay_number, repo_url |
+| `app_config` | promptpay_number, repo_url, hero_image_url |
 
 ข้อมูลข่าวเริ่มต้นเป็น **ข้อมูลตัวอย่าง** แก้ไข/ลบได้ในหลังบ้าน หรือกด "รีเซ็ตข้อมูลตัวอย่าง" ในหน้าตั้งค่า
 

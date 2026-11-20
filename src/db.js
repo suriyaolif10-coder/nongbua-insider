@@ -69,7 +69,7 @@ const SEED = {
     { id: 'b1', title: 'ร้านกาแฟภูพาน', image_url: '', link: '#', position: 'side', price: 300, active: false, views: 0, owner: 'ตัวอย่าง' },
   ],
   app_config: [
-    { id: 'config', promptpay_number: '', repo_url: GITHUB_URL },
+    { id: 'config', promptpay_number: '', repo_url: GITHUB_URL, hero_image_url: '' },
   ],
 }
 

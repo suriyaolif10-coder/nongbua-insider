@@ -30,6 +30,25 @@
 
 ข้อมูลข่าวเริ่มต้นเป็น **ข้อมูลตัวอย่าง** แก้ไข/ลบได้ในหลังบ้าน หรือกด "รีเซ็ตข้อมูลตัวอย่าง" ในหน้าตั้งค่า
 
+## โหมดการทำงาน
+| โหมด | เมื่อไหร่ | ข้อมูล | Login |
+|---|---|---|---|
+| **เดโม** | ไม่ได้ตั้งค่า Supabase | localStorage (เฉพาะเครื่องนั้น) | รหัสผ่าน `nongbua2026` |
+| **ออนไลน์** | ตั้งค่า `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` | Supabase (ทุกคนเห็นเหมือนกัน) | อีเมล + รหัสผ่านของ Supabase Auth |
+
+### ตั้งค่า Supabase (ฟรี)
+1. สมัคร/สร้างโปรเจกต์ที่ https://supabase.com (เลือก Region: Singapore)
+2. **SQL Editor** → วางไฟล์ [`supabase/schema.sql`](supabase/schema.sql) → Run
+3. **Authentication → Users → Add user** สร้างบัญชีแอดมิน (อีเมล + รหัสผ่าน, ติ๊ก Auto Confirm)
+4. กลับไป SQL Editor รัน: `insert into public.admin_users (email) values ('อีเมลแอดมิน');`
+5. **Authentication → Sign In / Providers** ปิด "Allow new users to sign up" (กันคนนอกสมัคร)
+6. **Project Settings → API** คัดลอก `Project URL` และ `anon public` key
+7. ใส่ค่า:
+   - เครื่องตัวเอง: คัดลอก `.env.example` เป็น `.env.local` แล้วใส่ค่า
+   - GitHub Pages: repo → **Settings → Secrets and variables → Actions → Variables** เพิ่ม `VITE_SUPABASE_URL` และ `VITE_SUPABASE_ANON_KEY` แล้วรัน workflow ใหม่
+
+ความปลอดภัย: ทุกคนอ่านข้อมูลได้ แต่เพิ่ม/แก้/ลบได้เฉพาะอีเมลในตาราง `admin_users` (Row Level Security) ส่วนผู้เข้าชมทั่วไปทำได้แค่เพิ่มยอดวิวโฆษณาผ่านฟังก์ชัน `increment_ad_view` (`anon` key เปิดเผยได้ตามปกติของ Supabase)
+
 ## เริ่มใช้งาน
 ```bash
 npm install
@@ -39,6 +58,6 @@ npm run build    # ไฟล์อยู่ใน dist/
 
 Deploy: มี workflow `.github/workflows/deploy.yml` สำหรับ GitHub Pages (เปิด Settings → Pages → Source: GitHub Actions)
 
-> หมายเหตุ: รหัสผ่านและข้อมูลอยู่ฝั่ง browser เหมาะสำหรับเดโม/ต้นแบบ หากใช้งานจริงควรย้ายไปใช้ backend ที่มีระบบยืนยันตัวตน
+> หมายเหตุ: โหมดเดโมเก็บรหัสผ่านและข้อมูลฝั่ง browser เหมาะสำหรับทดลองเท่านั้น ใช้งานจริงให้ตั้งค่า Supabase
 
-Tech: React 18 • Vite • Tailwind CSS • React Router (HashRouter)
+Tech: React 18 • Vite • Tailwind CSS • React Router (HashRouter) • Supabase (optional)

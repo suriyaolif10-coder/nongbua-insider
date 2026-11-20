@@ -1,6 +1,7 @@
-// API จำลองบน localStorage สำหรับ collections:
-// agency_sites, ad_banners, insider_tips, fb_posts, app_config
+// ชั้นข้อมูลสำหรับ collections: agency_sites, ad_banners, insider_tips, fb_posts, app_config
+// ใช้ Supabase เมื่อตั้งค่าไว้ ไม่งั้นใช้ localStorage (API จำลอง)
 import { useEffect, useState } from 'react'
+import { createClient } from '@supabase/supabase-js'
 
 const PREFIX = 'nongbua_'
 const AUTH_KEY = PREFIX + 'admin_auth'
@@ -72,22 +73,69 @@ const SEED = {
   ],
 }
 
+// ---------------------------------------------------------------------------
+// Backend: ถ้าตั้งค่า VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY จะใช้ Supabase
+// (ข้อมูลแชร์ทุกเครื่อง) ไม่งั้นใช้ localStorage (โหมดเดโม)
+// ---------------------------------------------------------------------------
+const SB_URL = import.meta.env.VITE_SUPABASE_URL
+const SB_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+export const supabase = SB_URL && SB_KEY ? createClient(SB_URL, SB_KEY) : null
+export const IS_REMOTE = !!supabase
+
+const COLLECTIONS = ['insider_tips', 'agency_sites', 'fb_posts', 'ad_banners', 'app_config']
+const cache = {} // ข้อมูลล่าสุดของแต่ละ collection (อ่านแบบ sync ได้)
+const loaded = {}
 const listeners = new Set()
 const emit = () => listeners.forEach((fn) => fn())
 
-function read(col) {
+function readLocal(col) {
   try {
     const raw = localStorage.getItem(PREFIX + col)
     if (raw) return JSON.parse(raw)
   } catch { /* ignore */ }
   const seed = SEED[col] || []
-  write(col, seed, false)
+  writeLocal(col, seed)
   return seed
 }
-
-function write(col, rows, notify = true) {
+function writeLocal(col, rows) {
   try { localStorage.setItem(PREFIX + col, JSON.stringify(rows)) } catch { /* ignore */ }
-  if (notify) emit()
+}
+
+function read(col) {
+  if (!IS_REMOTE) return readLocal(col)
+  if (!loaded[col]) refresh(col)
+  return cache[col] || []
+}
+
+function setRows(col, rows) {
+  if (IS_REMOTE) cache[col] = rows
+  else writeLocal(col, rows)
+  emit()
+}
+
+export const remoteError = { message: '' }
+const report = (error) => {
+  if (!error) return false
+  remoteError.message = error.message
+  console.error('[supabase]', error)
+  emit()
+  return true
+}
+
+const inflight = {}
+function refresh(col) {
+  if (!IS_REMOTE) return Promise.resolve(emit())
+  loaded[col] = true
+  if (inflight[col]) return inflight[col] // กันยิง request ซ้ำซ้อน
+  inflight[col] = (async () => {
+    const { data, error } = await supabase.from(col).select('*').order('created_at', { ascending: false })
+    inflight[col] = null
+    if (report(error)) return
+    remoteError.message = ''
+    cache[col] = data || []
+    emit()
+  })()
+  return inflight[col]
 }
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7)
@@ -95,26 +143,53 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 
 export const db = {
   list: (col) => read(col),
   get: (col, id) => read(col).find((r) => r.id === id),
-  create(col, data) {
+  refresh,
+  async create(col, data) {
     const row = { ...data, id: uid(), created_at: new Date().toISOString() }
-    write(col, [row, ...read(col)])
+    setRows(col, [row, ...read(col)]) // optimistic
+    if (IS_REMOTE) {
+      const { id, created_at, ...payload } = row // ให้ฐานข้อมูลสร้าง id / created_at เอง
+      const { error } = await supabase.from(col).insert(payload)
+      report(error)
+      await refresh(col)
+    }
     return row
   },
-  update(col, id, patch) {
-    write(col, read(col).map((r) => (r.id === id ? { ...r, ...patch } : r)))
+  async update(col, id, patch) {
+    setRows(col, read(col).map((r) => (r.id === id ? { ...r, ...patch } : r)))
+    if (IS_REMOTE) {
+      const { id: _i, created_at: _c, ...payload } = patch
+      report((await supabase.from(col).update(payload).eq('id', id)).error)
+      await refresh(col)
+    }
   },
-  remove(col, id) {
-    write(col, read(col).filter((r) => r.id !== id))
+  async remove(col, id) {
+    setRows(col, read(col).filter((r) => r.id !== id))
+    if (IS_REMOTE) {
+      report((await supabase.from(col).delete().eq('id', id)).error)
+      await refresh(col)
+    }
   },
-  // นับยอดวิวโฆษณา (views++)
-  incrementViews(id) {
-    write('ad_banners', read('ad_banners').map((r) => (r.id === id ? { ...r, views: (Number(r.views) || 0) + 1 } : r)))
+  // นับยอดวิวโฆษณา (views++) — โหมด Supabase เรียกฟังก์ชัน increment_ad_view ที่ทำงานแบบ atomic
+  async incrementViews(id) {
+    setRows('ad_banners', read('ad_banners').map((r) => (r.id === id ? { ...r, views: (Number(r.views) || 0) + 1 } : r)))
+    if (IS_REMOTE) report((await supabase.rpc('increment_ad_view', { ad_id: id })).error)
   },
-  config: () => read('app_config')[0] || SEED.app_config[0],
-  saveConfig(patch) {
-    const cur = read('app_config')
-    const base = cur[0] || SEED.app_config[0]
-    write('app_config', [{ ...base, ...patch, id: 'config' }, ...cur.slice(1)])
+  config: () => read('app_config').find((r) => r.id === 'config') || read('app_config')[0] || SEED.app_config[0],
+  async saveConfig(patch) {
+    const base = db.config()
+    const row = { ...base, ...patch, id: 'config' }
+    setRows('app_config', [row, ...read('app_config').filter((r) => r.id !== 'config')])
+    if (IS_REMOTE) {
+      const { created_at: _c, ...payload } = row
+      report((await supabase.from('app_config').upsert(payload)).error)
+      await refresh('app_config')
+    }
+  },
+  // รีเซ็ต: โหมด local ล้าง localStorage กลับเป็นข้อมูลตัวอย่าง
+  resetLocal() {
+    COLLECTIONS.forEach((c) => localStorage.removeItem(PREFIX + c))
+    emit()
   },
   subscribe(fn) {
     listeners.add(fn)
@@ -125,19 +200,55 @@ export const db = {
 }
 
 export function useCollection(col) {
-  const [rows, setRows] = useState(() => db.list(col))
-  useEffect(() => db.subscribe(() => setRows(db.list(col))), [col])
+  const [rows, setRowsState] = useState(() => db.list(col))
+  useEffect(() => {
+    const unsub = db.subscribe(() => setRowsState(db.list(col)))
+    if (IS_REMOTE) refresh(col) // โหลดข้อมูลล่าสุดทุกครั้งที่หน้าเปิด
+    else setRowsState(db.list(col))
+    return unsub
+  }, [col])
   return rows
 }
 
+// ---------------------------------------------------------------------------
+// Auth: โหมด local ใช้รหัสผ่าน nongbua2026 / โหมด Supabase ใช้อีเมล + รหัสผ่านของ Supabase Auth
+// ---------------------------------------------------------------------------
+let session = null
+let authReady = !IS_REMOTE
+if (IS_REMOTE) {
+  supabase.auth.getSession().then(({ data }) => { session = data.session; authReady = true; emit() })
+  supabase.auth.onAuthStateChange((_e, s) => { session = s; authReady = true; emit() })
+}
+
 export const auth = {
-  isLoggedIn: () => { try { return localStorage.getItem(AUTH_KEY) === 'true' } catch { return false } },
-  login(pw) {
-    if (pw !== ADMIN_PASSWORD) return false
-    localStorage.setItem(AUTH_KEY, 'true')
-    return true
+  isLoggedIn() {
+    if (IS_REMOTE) return !!session
+    try { return localStorage.getItem(AUTH_KEY) === 'true' } catch { return false }
   },
-  logout: () => localStorage.removeItem(AUTH_KEY),
+  // คืนค่า '' ถ้าสำเร็จ หรือข้อความ error
+  async login(password, email) {
+    if (IS_REMOTE) {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+      if (error) return 'อีเมลหรือรหัสผ่านไม่ถูกต้อง'
+      session = data.session
+      emit()
+      return ''
+    }
+    if (password !== ADMIN_PASSWORD) return 'รหัสผ่านไม่ถูกต้อง'
+    localStorage.setItem(AUTH_KEY, 'true')
+    return ''
+  },
+  async logout() {
+    if (IS_REMOTE) { await supabase.auth.signOut(); session = null }
+    else localStorage.removeItem(AUTH_KEY)
+    emit()
+  },
+}
+
+export function useAuth() {
+  const [, force] = useState(0)
+  useEffect(() => db.subscribe(() => force((n) => n + 1)), [])
+  return { ready: authReady, loggedIn: auth.isLoggedIn() }
 }
 
 export function timeAgo(iso) {

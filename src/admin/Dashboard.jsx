@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, Navigate, NavLink, useNavigate, useParams } from 'react-router-dom'
 import { Brand, Icon } from '../components/ui.jsx'
 import CrudTable from './CrudTable.jsx'
-import { auth, db, useCollection, DISTRICTS, AD_POSITIONS, AD_PRICES, GITHUB_URL } from '../db.js'
+import { auth, db, useAuth, useCollection, remoteError, IS_REMOTE, DISTRICTS, AD_POSITIONS, AD_PRICES, GITHUB_URL } from '../db.js'
 
 const SECTIONS = [
   { key: 'tips', label: 'จัดการข่าว', icon: '📰', col: 'insider_tips' },
@@ -49,10 +49,13 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const [sideOpen, setSideOpen] = useState(false)
 
-  if (!auth.isLoggedIn()) return <Navigate to="/admin/login" replace />
+  const { ready, loggedIn } = useAuth()
+
+  if (!ready) return <div className="grid min-h-screen place-items-center bg-black text-sm text-neutral-500">กำลังโหลด...</div>
+  if (!loggedIn) return <Navigate to="/admin/login" replace />
   const current = SECTIONS.find((s) => s.key === section) || SECTIONS[0]
 
-  const logout = () => { auth.logout(); navigate('/admin/login', { replace: true }) }
+  const logout = async () => { await auth.logout(); navigate('/admin/login', { replace: true }) }
 
   return (
     <div className="min-h-screen bg-black text-neutral-200 lg:flex">
@@ -86,10 +89,18 @@ export default function Dashboard() {
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
           </button>
           <h1 className="font-display text-lg font-bold text-white">Dashboard</h1>
+          <span className={`hidden rounded-full px-2 py-0.5 text-[11px] sm:inline ${IS_REMOTE ? 'bg-green-500/15 text-green-400' : 'bg-yellow-500/15 text-yellow-400'}`}>
+            {IS_REMOTE ? '● ออนไลน์ (Supabase)' : '● โหมดเดโม (เก็บในเครื่องนี้)'}
+          </span>
           <button onClick={logout} className="btn-ghost ml-auto px-3 py-1.5 text-xs">Logout</button>
         </header>
 
         <main className="space-y-6 p-4 sm:p-6">
+          {remoteError.message && (
+            <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+              บันทึก/โหลดข้อมูลไม่สำเร็จ: {remoteError.message}
+            </div>
+          )}
           <Stats />
           <div className="rounded-2xl border border-white/10 bg-ink-950 p-4 sm:p-5">
             {current.key === 'settings' ? (
@@ -153,6 +164,11 @@ function Settings() {
   const cfg = db.config()
   const [form, setForm] = useState({ promptpay_number: cfg.promptpay_number || '', repo_url: cfg.repo_url || GITHUB_URL })
   const [saved, setSaved] = useState(false)
+  const [touched, setTouched] = useState(false)
+  // โหมด Supabase: เติมค่าจากฐานข้อมูลเมื่อโหลดเสร็จ (ถ้ายังไม่ได้แก้ฟอร์ม)
+  useEffect(() => {
+    if (!touched) setForm({ promptpay_number: cfg.promptpay_number || '', repo_url: cfg.repo_url || GITHUB_URL })
+  }, [cfg.promptpay_number, cfg.repo_url]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const submit = (e) => {
     e.preventDefault()
@@ -168,7 +184,7 @@ function Settings() {
         <label className="mb-1 block text-xs font-medium text-neutral-400">เบอร์ / เลข PromptPay <span className="text-neutral-600">(promptpay_number)</span></label>
         <input
           value={form.promptpay_number}
-          onChange={(e) => setForm({ ...form, promptpay_number: e.target.value.replace(/[^\d-]/g, '') })}
+          onChange={(e) => setTouched(true) || setForm({ ...form, promptpay_number: e.target.value.replace(/[^\d-]/g, '') })}
           inputMode="numeric"
           placeholder="08x-xxx-xxxx หรือเลขบัตรประชาชน"
           className="input"
@@ -176,7 +192,7 @@ function Settings() {
       </div>
       <div>
         <label className="mb-1 block text-xs font-medium text-neutral-400">GitHub Repository <span className="text-neutral-600">(repo_url)</span></label>
-        <input type="url" value={form.repo_url} onChange={(e) => setForm({ ...form, repo_url: e.target.value })} className="input" />
+        <input type="url" value={form.repo_url} onChange={(e) => setTouched(true) || setForm({ ...form, repo_url: e.target.value })} className="input" />
         <a href={form.repo_url} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1.5 text-xs text-neutral-400 hover:text-brand">
           <Icon.GitHub className="h-4 w-4" /> เปิด repository
         </a>
@@ -185,17 +201,15 @@ function Settings() {
         <button type="submit" className="btn-brand">บันทึกการตั้งค่า</button>
         {saved && <span className="text-sm text-green-400">✓ บันทึกแล้ว</span>}
       </div>
-      <div className="border-t border-white/10 pt-4">
-        <button
-          type="button"
-          onClick={() => {
-            if (!confirm('รีเซ็ตข้อมูลทั้งหมดกลับเป็นค่าเริ่มต้น?')) return
-            ;['insider_tips', 'agency_sites', 'fb_posts', 'ad_banners', 'app_config'].forEach((c) => localStorage.removeItem('nongbua_' + c))
-            location.reload()
-          }}
-          className="text-xs text-red-400 hover:underline"
-        >รีเซ็ตข้อมูลตัวอย่าง</button>
-      </div>
+      {!IS_REMOTE && (
+        <div className="border-t border-white/10 pt-4">
+          <button
+            type="button"
+            onClick={() => confirm('รีเซ็ตข้อมูลทั้งหมดกลับเป็นค่าเริ่มต้น?') && db.resetLocal()}
+            className="text-xs text-red-400 hover:underline"
+          >รีเซ็ตข้อมูลตัวอย่าง</button>
+        </div>
+      )}
     </form>
   )
 }

@@ -109,8 +109,6 @@ th{font-weight:500;color:var(--muted);background:var(--paper-2)}
 tr:last-child td{border-bottom:0}
 td .go{padding:3px 8px;font-size:12px}
 .filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:8px}
-.chk.scope{flex-wrap:wrap;background:var(--paper-2);border-radius:10px;padding:8px 10px;margin:8px 0}
-.chk.scope small{flex-basis:100%;color:var(--muted);font-size:12px;padding-left:22px}
 .ylabel{font-size:13px;color:var(--muted);margin-bottom:4px}
 .ychips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
 .ybtn{border:2px solid var(--yc);background:#fff;color:var(--yc);border-radius:999px;padding:3px 12px;font-size:14px;font-weight:500}
@@ -266,9 +264,9 @@ function resolveArea(list){
 
 // ===================== สถานะเกม =====================
 const state={player:'',all:[],contracts:[],log:[],tracked:null,running:false};
-// แสดงบนแผนที่เฉพาะกลุ่มที่ "เปิดโครงการ" (ค่าเริ่มต้น) · ระวัง: คำว่า "เปิด" มี "ปิด" อยู่ข้างใน
+// ไม่นำกลุ่มที่ "ปิดโครงการ" ขึ้นแผนที่เลย (ไม่มีปุ่มสลับ) · ระวัง: คำว่า "เปิด" มี "ปิด" อยู่ข้างใน
 const isClosed=c=>/ปิด/.test(c.proj)&&!/เปิด/.test(c.proj);
-state.onlyOpen=store.get('vq-onlyopen')??true;
+state.onlyOpen=true; // ค่าคงที่ตามที่ผู้ใช้กำหนด
 function applyScope(keepPos){
   const px=player.x,py=player.y;
   state.contracts=state.onlyOpen?state.all.filter(c=>!isClosed(c)):state.all.slice();
@@ -276,7 +274,7 @@ function applyScope(keepPos){
   if(keepPos) warpTo(px,py);
   if(state.running){updateHud();updateFilterChip()}
 }
-function scopeText(){const n=state.all.filter(isClosed).length;return state.onlyOpen?'เฉพาะเปิดโครงการ'+(n?' (ซ่อนที่ปิดแล้ว '+n+' กลุ่ม)':''):'ทุกโครงการ (เปิดและปิด)'}
+function scopeText(){const n=state.all.filter(isClosed).length;return 'ไม่รวมกลุ่มที่ปิดโครงการ'+(n?' '+n+' กลุ่ม':'')}
 let W=2400,H=1600;
 const player={x:0,y:0,dir:1,walking:false};
 const YEAR_COLORS=['#5b6abf','#1f8a9e','#2f8f6b','#7a9a1f','#c98a12','#c8553d','#b2456e','#7d4fb0','#5b4630','#3f7cac'];
@@ -724,7 +722,7 @@ function boardDialog(f){
   f=f||state.filter||{q:'',tb:'',st:'',yrs:[],todo:false};state.filter=f;
   const years=Object.keys(yearColor);
   openModal(`<h2>ค้นหากลุ่ม</h2>
-    <label class="chk scope"><input type="checkbox" id="fOpen" ${state.onlyOpen?'checked':''}> แผนที่แสดงเฉพาะกลุ่มที่<b>เปิดโครงการ</b><small>${esc(scopeText())}</small></label>
+    <p class="sub" style="margin:2px 0 4px">${esc(scopeText())}</p>
     <input id="fQ" type="search" placeholder="ชื่อโครงการ ชื่อผู้เสนอ เลขสัญญา หรือชื่อบ้าน" value="${esc(f.q)}" autocomplete="off" style="margin:6px 0 8px">
     <div class="ylabel">ปีงบที่กู้ <small>(แตะได้หลายปี)</small></div>
     <div class="ychips">${years.map(y=>`<button class="ybtn" data-y="${esc(y)}" aria-pressed="${f.yrs.includes(y)}" style="--yc:${yearColor[y]}">ปี${yy(y)}</button>`).join('')}</div>
@@ -749,8 +747,6 @@ function boardDialog(f){
       ${list.length>80?'<p class="note">แสดง 80 รายการแรก เลือกปีหรือตำบลเพื่อให้แคบลง</p>':''}`;
     bindNav($('#fRes'));
   };
-  $('#fOpen').onchange=()=>{state.onlyOpen=$('#fOpen').checked;store.set('vq-onlyopen',state.onlyOpen);applyScope(false);
-    toast(state.onlyOpen?'แผนที่แสดงเฉพาะกลุ่มที่เปิดโครงการ':'แผนที่แสดงทุกโครงการ');boardDialog(f)};
   let t; $('#fQ').addEventListener('input',()=>{clearTimeout(t);t=setTimeout(render,200)});
   $('#fTb').onchange=render;$('#fSt').onchange=render;$('#fTodo').onchange=render;
   body.querySelectorAll('.ybtn').forEach(b=>b.onclick=()=>{b.setAttribute('aria-pressed',b.getAttribute('aria-pressed')!=='true');render()});
@@ -784,7 +780,7 @@ function questDialog(c){
       <b>เลขที่สัญญา</b><span>${esc(c.contract)}</span>
       <b>เงินกู้</b><span>${baht(c.loan)}</span>
       <b>สถานะหนี้</b><span>${chip(c.st)} ${c.pay&&c.pay!==c.st.label?esc(c.pay):''}</span>
-      <b>โครงการ</b><span>${esc(c.proj||'-')}</span>
+      <b>โครงการ</b><span>${/คดี/.test(c.proj)?`<span class="chip" style="background:#5b4630">${esc(c.proj)}</span>`:esc(c.proj||'-')}</span>
     </div>
     ${hist.length?`<div class="hist">${hist.map(e=>`<div><b>${new Date(e.ts).toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'})}</b> ${esc(RESULTS[e.result]?RESULTS[e.result].label:e.result)}${+e.amount?' '+baht(e.amount):''}${e.appt?' นัด '+esc(e.appt):''} · ${esc(e.player)}${e.note?'<br>'+esc(e.note):''}</div>`).join('')}</div>`:''}
     ${paid?`<p class="sub">กลุ่มนี้ชำระครบตามสัญญาแล้ว</p><div class="row"><button class="btn" data-close>ปิด</button></div>`:`

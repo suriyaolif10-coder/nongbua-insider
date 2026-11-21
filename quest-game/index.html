@@ -131,6 +131,23 @@ td .go{padding:3px 8px;font-size:12px}
 .login .panel{text-align:center;width:min(420px,100%)}
 .logo{font-size:30px;font-weight:600;line-height:1.1;margin:4px 0 4px;color:var(--wood)}
 .login .panel input{text-align:center;margin-bottom:4px}
+/* โทรศัพท์แนวนอน: ย่อ HUD ให้เห็นแผนที่มากที่สุด */
+@media (orientation:landscape) and (max-height:540px){
+  .me{width:200px;padding:5px 10px 7px;border-radius:12px}
+  .ava{width:28px;height:28px;font-size:13px}
+  .me-name{font-size:14px}.me-lv{font-size:11px}
+  .bar{height:7px;margin-top:4px}.me-row{font-size:10.5px;margin-top:1px}
+  #mini{width:84px;height:84px}
+  .demo{top:calc(100px + env(safe-area-inset-top,0px))}
+  .toolbar{padding-top:5px;padding-bottom:calc(5px + env(safe-area-inset-bottom,0px))}
+  .toolbar .ibtn{height:38px;max-width:100px;font-size:13px}
+  #zOut,#zIn{font-size:20px}#zAll{font-size:11px}
+  .act{width:72px;height:72px;font-size:14px;bottom:calc(60px + env(safe-area-inset-bottom,0px))}
+  .me-btn{bottom:calc(60px + env(safe-area-inset-bottom,0px));padding:6px 12px;font-size:13px}
+  .fchip{bottom:calc(62px + env(safe-area-inset-bottom,0px))}
+  .panel{max-height:calc(100dvh - 16px);padding:12px 14px}
+  .veil{padding-top:6px;padding-bottom:6px}
+}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -173,6 +190,7 @@ td .go{padding:3px 8px;font-size:12px}
     <input id="inName" maxlength="30" placeholder="เช่น สมหญิง" required>
     <div class="err" id="loginErr"></div>
     <div class="row"><button class="btn pri" id="btnStart" type="submit">เริ่มเควส</button></div>
+    <div class="row"><button class="btn" id="btnLand" type="button">เล่นแนวนอนเต็มจอ</button></div>
     <p class="note" id="loginNote"></p>
   </form>
 </div>
@@ -1030,6 +1048,16 @@ $('#loginNote').textContent=DEMO
   ?'ลิงก์นี้เป็นโหมดทดลอง ใช้ข้อมูลสมมติที่มีโครงสร้างเหมือนชีตจริง (ไม่มีชื่อคนจริง) ข้อมูลจริงจะเปิดผ่าน Google Apps Script ด้วยบัญชีของคุณเท่านั้น'
   :'ข้อมูลผู้กู้เป็นความลับของทางราชการ ห้ามแคปหน้าจอส่งต่อ';
 $('#inName').value=store.get('vq-name')||'';
+// เล่นแนวนอน: ขอเต็มจอแล้วล็อกการหมุนจอ (ได้บน Android Chrome · iPhone ต้องหมุนเครื่องเอง)
+async function goLandscape(){
+  let ok=false;
+  try{ if(!document.fullscreenElement&&document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen({navigationUI:'hide'}); }catch(e){}
+  try{ if(screen.orientation&&screen.orientation.lock){ await screen.orientation.lock('landscape'); ok=true; } }catch(e){}
+  if(!ok) toast('หมุนโทรศัพท์เป็นแนวนอนได้เลย ถ้าจอไม่หมุน ให้ปิดล็อกการหมุนจอในแถบตั้งค่าด่วน');
+  return ok;
+}
+$('#btnLand').addEventListener('click',async()=>{await goLandscape(); if($('#inName').value.trim()) $('#loginForm').requestSubmit();});
+const isPortrait=()=>innerHeight>innerWidth&&innerWidth<700;
 $('#loginForm').addEventListener('submit',async e=>{
   e.preventDefault();
   const name=$('#inName').value.trim();
@@ -1039,7 +1067,7 @@ $('#loginForm').addEventListener('submit',async e=>{
   try{
     await loadData();
     $('#login').hidden=true; $('#hud').hidden=false; $('#demoTag').hidden=!DEMO; state.running=true;
-    toast('แตะพื้นเพื่อเดิน แตะบ้านเพื่อเดินไปดูข้อมูล ถ่างสองนิ้วเพื่อซูม');
+    toast(isPortrait()?'แนะนำให้หมุนโทรศัพท์เป็นแนวนอน · แตะพื้นเพื่อเดิน ลากเพื่อเลื่อนแผนที่':'แตะพื้นเพื่อเดิน แตะบ้านเพื่อดูข้อมูล ลากเพื่อเลื่อนแผนที่');
   }catch(err){ $('#loginErr').textContent=err.message||String(err); $('#btnStart').disabled=false; $('#btnStart').textContent='เริ่มเควส'; }
 });
 resize(); requestAnimationFrame(loop);

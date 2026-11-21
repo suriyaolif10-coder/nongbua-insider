@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mitr:wght@300;400;500;600&display=swap">
 <style>
-/* Layout: full-screen canvas map of อ.โนนสัง; one village cluster per ตำบล around the district office. HUD floats in the corners. Single daytime look, so colors are fixed. */
+/* Layout: full-screen canvas map of the district; one village cluster per ตำบล around the district office. HUD floats in the corners. Single daytime look, so colors are fixed. */
 :root{
   --grass:#7cc06a; --ink:#24321f; --paper:#fffdf5; --paper-2:#f3eedc;
   --wood:#8a5a32; --gold:#f2b632; --exp:#4fa3e0; --hp:#e2586a;
@@ -155,7 +155,7 @@ td .go{padding:3px 8px;font-size:12px}
 <div class="veil login" id="login">
   <form class="panel" id="loginForm" autocomplete="off">
     <div class="logo">พัฒนากรออกเควส</div>
-    <p class="sub">ติดตามหนี้กองทุนพัฒนาบทบาทสตรี อ.โนนสัง</p>
+    <p class="sub">ติดตามหนี้กองทุนพัฒนาบทบาทสตรี</p>
     <label class="f" for="inName">ชื่อพัฒนากร</label>
     <input id="inName" maxlength="30" placeholder="เช่น สมหญิง" required>
     <div class="err" id="loginErr"></div>
@@ -188,7 +188,8 @@ const RESULTS={
   visit: {label:'เยี่ยมติดตามกลุ่ม',      hint:'ดูกิจการ ให้คำแนะนำ',        exp:15, visit:true},
   none:  {label:'ไม่พบผู้กู้',            hint:'มาใหม่ภายหลัง',             exp:10, visit:false},
 };
-const KNOWN_TAMBON=['บ้านถิ่น','หนองเรือ','กุดดู่','บ้านค้อ','โนนเมือง','โคกใหญ่','โคกม่วง','นิคมพัฒนา','ปางกู่','โนนสัง'];
+// ตำบลที่รู้จักล่วงหน้า (ใช้เฉพาะแถวที่ที่อยู่ไม่มีคำว่า ต./ตำบล) อำเภออื่นเกมจะเรียนรู้ชื่อตำบลจากข้อมูลเอง
+const TAMBON_HINTS={'โนนสัง':['บ้านถิ่น','หนองเรือ','กุดดู่','บ้านค้อ','โนนเมือง','โคกใหญ่','โคกม่วง','นิคมพัฒนา','ปางกู่','โนนสัง']};
 const TAMBON_ALIAS={'โตกใหญ่':'โคกใหญ่'};
 
 // ===================== ข้อมูล =====================
@@ -226,13 +227,31 @@ function parseRow(sheet,v){
   const contract=f(3), project=f(4); if(!contract&&!project) return null;
   const addr=f(6);
   let tb=(addr.match(/(?:ต\.|ตำบล)\s*([ก-๙]+)/)||[])[1];
-  if(!tb){const a2=addr.replace(/(?:อ\.|อำเภอ)\s*โนนสัง/g,'');tb=KNOWN_TAMBON.find(k=>a2.includes(k))}
-  tb=TAMBON_ALIAS[tb]||tb||'ไม่ระบุตำบล';
+  if(tb) tb=TAMBON_ALIAS[tb]||tb;
   const moo=(addr.match(/(?:ม\.|หมู่ที่|หมู่)\s*(\d+)/)||[])[1]||'';
   const vil=(addr.match(/หมู่บ้าน\s*(บ้าน[ก-๙]+)/)||addr.match(/(บ้าน(?!เลขที่)[ก-๙]+)\s*(?:ม\.|หมู่)/)||[])[1]||'';
   const pay=f(8);
-  return {key:sheet+'|'+contract, sheet, year:f(2), contract, project:project||'(ไม่มีชื่อโครงการ)', proposer:f(5), addr, tambon:tb, moo, vil,
+  return {key:sheet+'|'+contract, sheet, prov:f(0), amp:f(1).replace(/^(อ\.|อำเภอ)\s*/,''), year:f(2), contract, project:project||'(ไม่มีชื่อโครงการ)', proposer:f(5), addr, tambon:tb, moo, vil,
     loan:parseFloat(f(7).replace(/,/g,''))||0, pay, proj:f(9), st:statusOf(pay)};
+}
+
+// ตั้งชื่อพื้นที่ตามข้อมูลในชีต (อำเภอ/จังหวัด) และเติมตำบลให้แถวที่ที่อยู่ไม่มี ต.
+let AREA='';
+function resolveArea(list){
+  const amps=[...new Set(list.map(c=>c.amp).filter(Boolean))];
+  const provs=[...new Set(list.map(c=>c.prov).filter(Boolean))];
+  const learned={};list.forEach(c=>{if(c.tambon)(learned[c.amp]=learned[c.amp]||new Set()).add(c.tambon)});
+  list.forEach(c=>{
+    if(!c.tambon){
+      const a2=c.addr.replace(/(?:อ\.|อำเภอ)\s*[ก-๙]+/g,'').replace(/(?:จ\.|จังหวัด)\s*[ก-๙]+/g,'');
+      const cand=[...(learned[c.amp]||[]),...(TAMBON_HINTS[c.amp]||[])].sort((a,b)=>b.length-a.length);
+      c.tambon=cand.find(k=>a2.includes(k))||'ไม่ระบุตำบล';
+    }
+    if(amps.length>1) c.tambon=c.tambon+' (อ.'+(c.amp||'?')+')'; // หลายอำเภอในไฟล์เดียว กันชื่อตำบลซ้ำ
+  });
+  AREA=amps.length===1?'อ.'+amps[0]+(provs.length===1?' จ.'+provs[0]:''):amps.length>1?amps.length+' อำเภอ':'';
+  const sub=document.querySelector('#login .sub'); if(sub) sub.textContent='ติดตามหนี้กองทุนพัฒนาบทบาทสตรี'+(AREA?' '+AREA:'');
+  return list;
 }
 
 // ===================== สถานะเกม =====================
@@ -619,7 +638,7 @@ function summaryDialog(){
   const s=summarize(state.contracts);
   const per=clusters.map(c=>({c,s:summarize(c.items)}));
   const years=[...new Set(state.contracts.map(c=>c.year))].sort();
-  openModal(`<h2>สรุปข้อมูลกลุ่มสตรี</h2><p class="sub">อ.โนนสัง · ทุกปีงบประมาณ${DEMO?' · ข้อมูลตัวอย่าง':''}</p>
+  openModal(`<h2>สรุปข้อมูลกลุ่มสตรี</h2><p class="sub">${esc(AREA||'ทุกพื้นที่')} · ทุกปีงบประมาณ${DEMO?' · ข้อมูลตัวอย่าง':''}</p>
     <div class="stats">
       <div class="stat"><b>${s.n}</b><span>สัญญา/กลุ่ม</span></div>
       <div class="stat"><b>${baht(s.loan)}</b><span>เงินกู้รวม</span></div>
@@ -825,7 +844,7 @@ function journalDialog(mk){
 async function loadData(keepPos){
   const res=await api.load();
   const px=player.x,py=player.y;
-  state.contracts=res.rows.map(r=>parseRow(r.sheet,r.v)).filter(Boolean);
+  state.contracts=resolveArea(res.rows.map(r=>parseRow(r.sheet,r.v)).filter(Boolean));
   state.log=(res.log||[]).concat(journal.pending().map(j=>({ts:j.ts,player:j.player,key:j.key,result:j.result,amount:j.amount,appt:j.appt,note:j.note,exp:j.exp,pending:j.id})));
   buildWorld(); resize();
   setTimeout(syncPending,800);

@@ -245,7 +245,7 @@ function demoRows(){ // ข้อมูลสมมติ โครงสร้�
 const api = {
   async load(){
     if(GAS){ const r=await gasCall('apiLoad'); if(!r||!r.ok) throw new Error((r&&r.error)||'โหลดข้อมูลไม่ได้'); return r; }
-    return {ok:true, rows:demoRows(), log:store.get('vq2-demo-log')||[]};
+    return {ok:true, rows:demoRows(), sheets:['ปี 60','ปี 61','ปี62','ปี 63','ปี 64','ปี 65','ปี 66','ปี 67','ปี 68','ปี 69','ปี 70'], log:store.get('vq2-demo-log')||[]};
   },
   async submit(p){
     if(GAS){ const r=await gasCall('apiSubmit',p); if(!r||!r.ok){const e=new Error((r&&r.error)||'บันทึกไม่สำเร็จ');e.fatal=true;throw e} return r.entry; }
@@ -268,6 +268,9 @@ function parseRow(sheet,v){
 
 // ตั้งชื่อพื้นที่ตามข้อมูลในชีต (อำเภอ/จังหวัด) และเติมตำบลให้แถวที่ที่อยู่ไม่มี ต.
 let AREA='';
+// ชื่อแท็บ "ปี 68" → ปีงบ "2568" (ใช้แสดงปีที่ยังไม่มีข้อมูลด้วย)
+function sheetToYear(n){const m=String(n).match(/(\d{2,4})/);if(!m)return '';const d=m[1];return d.length===2?'25'+d:d}
+function allYears(){return [...new Set([...state.all.map(c=>c.year),...(state.sheetYears||[])].filter(Boolean))].sort()}
 function resolveArea(list){
   const amps=[...new Set(list.map(c=>c.amp).filter(Boolean))];
   const provs=[...new Set(list.map(c=>c.prov).filter(Boolean))];
@@ -300,7 +303,7 @@ function applyScope(keepPos){
 function scopeText(){const n=state.all.filter(isClosed).length;return 'ไม่รวมกลุ่มที่ปิดโครงการ'+(n?' '+n+' กลุ่ม':'')}
 let W=2400,H=1600;
 const player={x:0,y:0,dir:1,walking:false};
-const YEAR_COLORS=['#5b6abf','#1f8a9e','#2f8f6b','#7a9a1f','#c98a12','#c8553d','#b2456e','#7d4fb0','#5b4630','#3f7cac'];
+const YEAR_COLORS=['#5b6abf','#1f8a9e','#2f8f6b','#7a9a1f','#c98a12','#c8553d','#b2456e','#7d4fb0','#5b4630','#3f7cac','#d4572a','#2a8c8c','#8a6d1e','#a03e8f'];
 let yearColor={};
 const yy=y=>String(y).slice(-2);
 let houses=[],clusters=[],hub=null,trees=[],decor=[],roads=[],floats=[],npcs=[];
@@ -331,7 +334,7 @@ function buildWorld(){
   hub={x:hc.x,y:hc.y};
   const roofs=['#c8553d','#3f7cac','#8e5aa8','#d98a1c','#2f8f6b','#b2456e'];
   houses=[];clusters=[];roads=[];
-  const yrs=[...new Set(state.contracts.map(c=>c.year))].sort();
+  const yrs=allYears();
   yearColor={};yrs.forEach((y,i)=>yearColor[y]=YEAR_COLORS[i%YEAR_COLORS.length]);
   names.forEach((name,i)=>{
     const cell=rest[i], items=by[name].slice().sort((a,b)=>(+a.moo||99)-(+b.moo||99)||a.project.localeCompare(b.project,'th'));
@@ -786,7 +789,7 @@ function rowLi(c){
 function summaryDialog(){
   const s=summarize(state.contracts);
   const per=clusters.map(c=>({c,s:summarize(c.items)}));
-  const years=[...new Set(state.contracts.map(c=>c.year))].sort();
+  const years=allYears();
   openModal(`<h2>สรุปข้อมูลกลุ่มสตรี</h2><p class="sub">${esc(AREA||'ทุกพื้นที่')} · ทุกปีงบประมาณ · ${esc(scopeText())}${DEMO?' · ข้อมูลตัวอย่าง':''}</p>
     <div class="stats">
       <div class="stat"><b>${s.n}</b><span>สัญญา/กลุ่ม</span></div>
@@ -803,7 +806,7 @@ function summaryDialog(){
     </tbody></table></div>
     <h3>แยกตามปีงบประมาณ</h3>
     <div class="tbl"><table><thead><tr><th>ปีงบ</th><th>สัญญา</th><th>ชำระครบ</th><th>ทวง 2</th><th>ทวง 1/ค้าง</th><th>ปรับโครงสร้าง</th><th>เงินกู้</th></tr></thead><tbody>
-    ${years.map(y=>{const t=summarize(state.contracts.filter(c=>c.year===y));return `<tr><td><span class="ychip" style="background:${yearColor[y]}">ปี${yy(y)}</span> ${esc(y)}</td><td>${t.n}</td><td>${t.by.paid}</td><td>${t.by.d2}</td><td>${t.by.d1+t.by.late}</td><td>${t.by.rs}</td><td>${baht(t.loan)}</td></tr>`}).join('')}
+    ${years.map(y=>{const t=summarize(state.contracts.filter(c=>c.year===y));if(!t.n)return `<tr><td><span class="ychip" style="background:${yearColor[y]}">ปี${yy(y)}</span> ${esc(y)}</td><td colspan="6" style="text-align:left;color:var(--muted)">ยังไม่มีข้อมูล</td></tr>`;return `<tr><td><span class="ychip" style="background:${yearColor[y]}">ปี${yy(y)}</span> ${esc(y)}</td><td>${t.n}</td><td>${t.by.paid}</td><td>${t.by.d2}</td><td>${t.by.d1+t.by.late}</td><td>${t.by.rs}</td><td>${baht(t.loan)}</td></tr>`}).join('')}
     </tbody></table></div>
     <div class="row"><button class="btn" data-close>ปิด</button></div>`);
   bindNav($('#modalBody'));
@@ -868,7 +871,7 @@ function boardDialog(f){
     $('#fRes').innerHTML=`<p class="sub" style="margin:4px 0">พบ <b>${list.length}</b> กลุ่ม · เงินกู้รวม ${baht(s.loan)} · เยี่ยมแล้วเดือนนี้ ${s.visited}/${s.need}</p>
       ${list.length?statusBar(s):''}
       ${f.tb?`<div class="row" style="margin:8px 0"><button class="btn" data-warp="${esc(f.tb)}">ขี่มอไซค์ไป ต.${esc(f.tb)}</button></div>`:''}
-      <div class="list" style="margin-top:8px">${list.slice(0,80).map(rowLi).join('')||'<p class="sub">ไม่พบกลุ่มตามเงื่อนไขนี้</p>'}</div>
+      <div class="list" style="margin-top:8px">${list.slice(0,80).map(rowLi).join('')||(f.yrs.length&&f.yrs.every(y=>!state.all.some(c=>c.year===y))?'<p class="sub">ปีงบนี้ยังไม่มีข้อมูลในชีต เมื่อกรอกข้อมูลในแท็บ "ปี '+f.yrs.map(yy).join('", "ปี ')+'" แล้วกด "ดึงข้อมูลใหม่" กลุ่มจะขึ้นในแผนที่</p>':'<p class="sub">ไม่พบกลุ่มตามเงื่อนไขนี้</p>')}</div>
       ${list.length>80?'<p class="note">แสดง 80 รายการแรก เลือกปีหรือตำบลเพื่อให้แคบลง</p>':''}`;
     bindNav($('#fRes'));
   };
@@ -1039,6 +1042,7 @@ function journalDialog(mk){
 async function loadData(keepPos){
   const res=await api.load();
   state.all=resolveArea(res.rows.map(r=>parseRow(r.sheet,r.v)).filter(Boolean));
+  state.sheetYears=(res.sheets||[]).map(sheetToYear).filter(Boolean);
   state.log=(res.log||[]).concat(journal.pending().map(j=>({ts:j.ts,player:j.player,key:j.key,result:j.result,amount:j.amount,appt:j.appt,note:j.note,exp:j.exp,pending:j.id})));
   applyScope(keepPos);
   setTimeout(syncPending,800);

@@ -52,16 +52,17 @@ function logSheet_() {
 /** ส่งข้อมูลทุกสัญญา + ประวัติการติดตาม ให้เกม */
 function apiLoad() {
   const ss = SpreadsheetApp.getActive();
-  const rows = [];
+  const rows = [], sheets = [];
   ss.getSheets().forEach(sh => {
     const name = sh.getName();
+    if (DATA_SHEET_RE.test(name)) sheets.push(name); // ส่งชื่อแท็บปีไปด้วย แม้ยังไม่มีข้อมูล
     if (!DATA_SHEET_RE.test(name) || sh.getLastRow() < 2) return;
     const v = sh.getRange(1, 1, sh.getLastRow(), 10).getDisplayValues();
     for (let i = 1; i < v.length; i++) {
       if (String(v[i][3]).trim() || String(v[i][4]).trim()) rows.push({ sheet: name, v: v[i] });
     }
   });
-  return { ok: true, rows: rows, log: readLog_() };
+  return { ok: true, rows: rows, sheets: sheets, log: readLog_() };
 }
 
 function readLog_() {

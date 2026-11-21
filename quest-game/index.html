@@ -53,6 +53,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .joy{position:absolute;left:calc(22px + env(safe-area-inset-left,0px));bottom:calc(22px + env(safe-area-inset-bottom,0px));
   width:130px;height:130px;border-radius:50%;background:rgba(255,255,255,.28);border:2px solid rgba(255,255,255,.6);touch-action:none}
 .knob{position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px 0 0 -28px;border-radius:50%;background:#fff;box-shadow:0 3px 8px rgba(0,0,0,.25)}
+.me-btn{position:absolute;left:calc(18px + env(safe-area-inset-left,0px));bottom:calc(30px + env(safe-area-inset-bottom,0px));width:auto;height:auto;padding:8px 14px;font-size:14px;line-height:1.2}
 .act{position:absolute;right:calc(22px + env(safe-area-inset-right,0px));bottom:calc(26px + env(safe-area-inset-bottom,0px));
   width:96px;height:96px;border-radius:50%;border:3px solid var(--ink);background:var(--hp);color:#fff;font-size:16px;font-weight:600;
   box-shadow:0 4px 0 var(--ink);transition:background .2s,opacity .2s;padding:4px;line-height:1.15}
@@ -157,6 +158,7 @@ td .go{padding:3px 8px;font-size:12px}
   <div class="fchip" id="fchip" hidden><span id="fchipTxt"></span><button id="fchipX" aria-label="ล้างตัวกรองแผนที่">✕</button></div>
   <div class="joy" id="joy" aria-hidden="true" hidden><div class="knob" id="knob"></div></div>
   <button class="act" id="act" data-on="0">สำรวจ</button>
+  <button class="ibtn me-btn" id="btnMe" hidden>กลับไป<br>ที่ตัวฉัน</button>
 </div>
 <div class="toast" id="toast" role="status"></div>
 
@@ -337,6 +339,7 @@ function buildWorld(){
   ];
   player.x=hub.x;player.y=hub.y+150;
   buildGrid(); walk=null;
+  camC.x=player.x;camC.y=player.y;setCamMode('follow');
 }
 
 // ===================== อินพุต =====================
@@ -345,6 +348,7 @@ addEventListener('keydown',e=>{
   if(!$('#modal').hidden||!state.running){ if(e.key==='Escape') closeModal(); return; }
   if(e.key==='-'){setZoom(Z/1.25);return} if(e.key==='='||e.key==='+'){setZoom(Z*1.25);return}
   keys[e.key.toLowerCase()]=true;
+  if(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].includes(e.key.toLowerCase()))setCamMode('follow');
   if(e.key===' '||e.key==='Enter'||e.key.toLowerCase()==='e'){ e.preventDefault(); doAction(); }
 });
 addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false});
@@ -375,12 +379,15 @@ function nearest(){
   for(const n of npcs){const d=Math.hypot(player.x-n.x,player.y-n.y);if(d<bd){bd=d;best={type:n.id,n}}}
   return best;
 }
-function warpTo(x,y){walk=null;player.x=x;player.y=y;let k=0;while(blocked(player.x,player.y)&&k++<40)player.y+=15}
+function warpTo(x,y){walk=null;player.x=x;player.y=y;let k=0;while(blocked(player.x,player.y)&&k++<40)player.y+=15;camC.x=player.x;camC.y=player.y;setCamMode('follow')}
 
 // ===================== วาด =====================
 const cv=document.getElementById('game'), ctx=cv.getContext('2d');
 const mini=document.getElementById('mini'), mctx=mini.getContext('2d');
 let DPR=1,VW=0,VH=0,Z=1,cam={x:0,y:0},zoom=null;
+// กล้อง: 'follow' ตามตัวละคร · 'free' เลื่อนด้วยนิ้ว (camC = จุดกลางจอในโลก)
+let camMode='follow',camC={x:0,y:0},camVel={x:0,y:0},drag=null;
+function setCamMode(m){camMode=m;camVel.x=camVel.y=0;const b=document.getElementById('btnMe');if(b)b.hidden=m!=='free'}
 function zMin(){return Math.min(VW/W,VH/H)}
 function zMax(){return VW<700?1.1:1.4}
 function setZoom(z){zoom=Math.max(zMin(),Math.min(zMax(),z));Z=zoom}
@@ -485,8 +492,8 @@ function drawOffice(){
 }
 function render(t){
   const cw=VW/Z, ch=VH/Z;
-  cam.x=Math.max(0,Math.min(W-cw,player.x-cw/2)); cam.y=Math.max(0,Math.min(H-ch,player.y-ch/2));
-  if(cw>W) cam.x=(W-cw)/2; if(ch>H) cam.y=(H-ch)/2;
+  camC.x=cw>=W?W/2:Math.max(cw/2,Math.min(W-cw/2,camC.x)); camC.y=ch>=H?H/2:Math.max(ch/2,Math.min(H-ch/2,camC.y));
+  cam.x=camC.x-cw/2; cam.y=camC.y-ch/2;
   const vis=(x,y,m=200)=>x>cam.x-m&&x<cam.x+cw+m&&y>cam.y-m&&y<cam.y+ch+m;
   ctx.setTransform(DPR,0,0,DPR,0,0);ctx.fillStyle='#5aa152';ctx.fillRect(0,0,VW,VH);
   ctx.setTransform(DPR*Z,0,0,DPR*Z,-cam.x*DPR*Z,-cam.y*DPR*Z);
@@ -594,6 +601,7 @@ function walkTo(tx,ty,act){
   if(!pts||!pts.length){toast('เดินไปตรงนั้นไม่ได้ ลองแตะใกล้ทางเดิน');return}
   let len=0,px=player.x,py=player.y;pts.forEach(p=>{len+=Math.hypot(p.x-px,p.y-py);px=p.x;py=p.y});
   walk={pts,act,len,goal:pts[pts.length-1]};
+  setCamMode('follow');
 }
 // ===================== ลูป =====================
 let last=0;
@@ -622,6 +630,9 @@ function loop(ts){
     const txt=!n?'สำรวจ':n.type==='house'?(n.h.c.st.key==='paid'?'ดูกลุ่ม':'ทำเควส'):n.type==='boss'?'คุย':n.type==='sign'?'ข้อมูลตำบล':'เปิดกระดาน';
     if(btn.textContent!==txt) btn.textContent=txt; btn.dataset.on=n?'1':'0';
   }
+  if(camMode==='follow'){const k=Math.min(1,dt*7);camC.x+=(player.x-camC.x)*k;camC.y+=(player.y-camC.y)*k}
+  else if(!drag&&(Math.abs(camVel.x)+Math.abs(camVel.y)>8)){ // ไถลต่อหลังปัดนิ้ว
+    camC.x-=camVel.x/Z*dt;camC.y-=camVel.y/Z*dt;const f=Math.pow(.03,dt);camVel.x*=f;camVel.y*=f}
   for(const f of floats){f.y-=40*dt;f.life-=dt*.8}
   if(hub) render(t);
   requestAnimationFrame(loop);
@@ -669,30 +680,42 @@ $('#act').addEventListener('click',doAction);
 $('#btnList').addEventListener('click',()=>boardDialog());
 $('#btnSum').addEventListener('click',summaryDialog);
 $('#btnBook').addEventListener('click',()=>journalDialog());
+$('#btnMe').addEventListener('click',()=>setCamMode('follow'));
 $('#fchipX').addEventListener('click',()=>{state.mapFilter=null;updateFilterChip();toast('แสดงทุกบ้านแล้ว')});
 $('#fchipTxt').addEventListener('click',()=>boardDialog());
 addEventListener('online',()=>syncPending());
 $('#zOut').addEventListener('click',()=>setZoom(Z/1.25));
 $('#zIn').addEventListener('click',()=>setZoom(Z*1.25));
 $('#zAll').addEventListener('click',()=>{setZoom(Z<=zMin()+.001?DEF_ZOOM():zMin())});
-// ใช้สองนิ้วถ่าง/หุบเพื่อซูม · แตะบ้านเพื่อดูข้อมูลย่อ (ปีที่กู้ สถานะ)
+// นิ้วเดียวลาก = เลื่อนแผนที่ (ปัดแรงจะไถลต่อ) · แตะ = เดินไปจุดนั้น · สองนิ้วถ่าง/หุบ = ซูม
 const ptrs=new Map();let pinch=null,tapStart=null;
 cv.addEventListener('pointerdown',e=>{
   try{cv.setPointerCapture(e.pointerId)}catch(_){}
-  ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
-  if(ptrs.size===2){const [a,b]=[...ptrs.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y)||1,z:Z};tapStart=null}
-  else if(ptrs.size===1) tapStart={x:e.clientX,y:e.clientY,t:performance.now()};
+  ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY}); camVel.x=camVel.y=0;
+  if(ptrs.size===2){const [a,b]=[...ptrs.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y)||1,z:Z};tapStart=null;drag=null}
+  else if(ptrs.size===1){tapStart={x:e.clientX,y:e.clientY,t:performance.now()};drag={sx:e.clientX,sy:e.clientY,x:e.clientX,y:e.clientY,lt:performance.now(),moved:false}}
 });
 cv.addEventListener('pointermove',e=>{
   if(!ptrs.has(e.pointerId))return; ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
-  if(pinch&&ptrs.size>=2){const [a,b]=[...ptrs.values()];setZoom(pinch.z*Math.hypot(a.x-b.x,a.y-b.y)/pinch.d)}
-  if(tapStart&&Math.hypot(e.clientX-tapStart.x,e.clientY-tapStart.y)>12)tapStart=null;
+  if(pinch&&ptrs.size>=2){const [a,b]=[...ptrs.values()];setZoom(pinch.z*Math.hypot(a.x-b.x,a.y-b.y)/pinch.d);return}
+  if(!drag||!state.running) return;
+  if(!drag.moved&&Math.hypot(e.clientX-drag.sx,e.clientY-drag.sy)>10){drag.moved=true;tapStart=null;if(camMode!=='free')setCamMode('free')}
+  if(drag.moved){
+    const dx=e.clientX-drag.x,dy=e.clientY-drag.y,now=performance.now(),dtm=Math.max(8,now-drag.lt);
+    camC.x-=dx/Z;camC.y-=dy/Z;camVel.x=dx/dtm*1000;camVel.y=dy/dtm*1000;drag.lt=now;
+  }
+  drag.x=e.clientX;drag.y=e.clientY;
 });
 const ptrUp=e=>{
   ptrs.delete(e.pointerId); if(ptrs.size<2)pinch=null;
   if(e.type==='pointerup'&&tapStart&&ptrs.size===0&&performance.now()-tapStart.t<450) tapAt(e.clientX,e.clientY);
-  if(ptrs.size===0)tapStart=null;
+  if(ptrs.size===0){ if(drag&&drag.moved&&performance.now()-drag.lt>90){camVel.x=camVel.y=0} drag=null; tapStart=null; }
 };
+// แตะแผนที่ย่อ = เลื่อนกล้องไปตรงนั้น
+mini.addEventListener('click',e=>{
+  if(!state.running)return; const r=mini.getBoundingClientRect(), s=208, k=Math.min(s/W,s/H)*.92, ox=(s-W*k)/2, oy=(s-H*k)/2;
+  camC.x=((e.clientX-r.left)*s/r.width-ox)/k; camC.y=((e.clientY-r.top)*s/r.height-oy)/k; setCamMode('free');
+});
 cv.addEventListener('pointerup',ptrUp);cv.addEventListener('pointercancel',ptrUp);
 function tapAt(sx,sy){
   if(!state.running||!$('#modal').hidden)return;

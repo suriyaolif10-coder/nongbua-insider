@@ -42,6 +42,10 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .ibtn{width:46px;height:44px;border-radius:12px;border:2px solid var(--ink);background:var(--paper);box-shadow:0 3px 0 var(--ink);font-size:13px;font-weight:500;line-height:1;color:var(--ink);padding:0}
 #zOut,#zIn{font-size:24px}
 #zAll{font-size:11px}
+.ibtn{position:relative}
+.badge{position:absolute;top:-7px;right:-7px;min-width:18px;height:18px;border-radius:9px;background:#d93b3b;color:#fff;font-size:11px;line-height:18px;padding:0 4px;box-sizing:border-box}
+.jday{font-size:13px;font-weight:500;color:var(--muted);margin:10px 0 4px}
+.jt{font-size:12px;color:var(--muted)}
 .ibtn:active{transform:translateY(2px);box-shadow:0 1px 0 var(--ink)}
 #mini{width:104px;height:104px;border-radius:50%;border:3px solid var(--gold);background:#9fd38c;box-shadow:0 3px 0 var(--ink)}
 .demo{position:absolute;top:calc(122px + env(safe-area-inset-top,0px));right:calc(14px + env(safe-area-inset-right,0px));
@@ -133,6 +137,7 @@ td .go{padding:3px 8px;font-size:12px}
     <div class="zcol">
       <button class="ibtn" id="btnList" aria-label="กระดานเควส">เควส</button>
       <button class="ibtn" id="btnSum" aria-label="สรุปข้อมูลกลุ่ม">สรุป</button>
+      <button class="ibtn" id="btnBook" aria-label="สมุดบันทึกในเครื่อง">สมุด<span class="badge" id="pendBadge" hidden>0</span></button>
       <button class="ibtn" id="zOut" aria-label="ซูมออก ดูภาพกว้าง">−</button>
       <button class="ibtn" id="zIn" aria-label="ซูมเข้า">+</button>
       <button class="ibtn" id="zAll" aria-label="ดูทั้งอำเภอ">ทั้ง<br>แผนที่</button>
@@ -209,7 +214,7 @@ const api = {
     return {ok:true, rows:demoRows(), log:store.get('vq2-demo-log')||[]};
   },
   async submit(p){
-    if(GAS){ const r=await gasCall('apiSubmit',p); if(!r||!r.ok) throw new Error((r&&r.error)||'บันทึกไม่สำเร็จ'); return r.entry; }
+    if(GAS){ const r=await gasCall('apiSubmit',p); if(!r||!r.ok){const e=new Error((r&&r.error)||'บันทึกไม่สำเร็จ');e.fatal=true;throw e} return r.entry; }
     const entry={ts:new Date().toISOString(),player:p.player,key:p.key,result:p.result,amount:p.amount,appt:p.appt,note:p.note,exp:RESULTS[p.result].exp};
     const log=store.get('vq2-demo-log')||[]; log.push(entry); store.set('vq2-demo-log',log); return entry;
   }
@@ -532,6 +537,8 @@ function doAction(){
 $('#act').addEventListener('click',doAction);
 $('#btnList').addEventListener('click',()=>boardDialog());
 $('#btnSum').addEventListener('click',summaryDialog);
+$('#btnBook').addEventListener('click',()=>journalDialog());
+addEventListener('online',()=>syncPending());
 $('#zOut').addEventListener('click',()=>setZoom(Z/1.25));
 $('#zIn').addEventListener('click',()=>setZoom(Z*1.25));
 $('#zAll').addEventListener('click',()=>{setZoom(Z<=zMin()+.001?DEF_ZOOM():zMin())});
@@ -659,8 +666,14 @@ function questDialog(c){
     const note=$('#qnote').value.trim();
     send.disabled=true; send.textContent='กำลังบันทึก…'; $('#qerr').textContent='';
     const before=lvl(myExp()).lv;
+    const payload={player:state.player,key:c.key,sheet:c.sheet,contract:c.contract,project:c.project,tambon:c.tambon,result:pick,amount,appt,note};
+    const jr={id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),ts:new Date().toISOString(),...payload,moo:c.moo,exp:RESULTS[pick].exp,status:'sent'};
     try{
-      const entry=await api.submit({player:state.player,key:c.key,sheet:c.sheet,contract:c.contract,project:c.project,tambon:c.tambon,result:pick,amount,appt,note});
+      let entry, offline=false;
+      try{ entry=await api.submit(payload); jr.ts=entry.ts||jr.ts; }
+      catch(err){ if(err&&err.fatal) throw err; offline=true; jr.status='pending';
+        entry={ts:jr.ts,player:jr.player,key:jr.key,result:jr.result,amount:jr.amount,appt:jr.appt,note:jr.note,exp:jr.exp,pending:jr.id}; }
+      journal.add(jr);
       state.log.push(entry);
       if(state.tracked===c.key&&RESULTS[pick].visit) state.tracked=null;
       const h=houses.find(h=>h.c===c);
@@ -668,8 +681,92 @@ function questDialog(c){
       if(amount) floats.push({text:'+'+baht(amount),x:h.x,y:h.y-95,life:1.8,color:'#3d9a5b'});
       closeModal(); updateHud();
       const L=lvl(myExp()).lv;
-      toast(L>before?'เลเวลอัป! Lv'+L+' '+rank(L):'บันทึกแล้ว: '+RESULTS[pick].label);
+      toast(offline?'ไม่มีสัญญาณ เก็บไว้ในเครื่องแล้ว จะส่งเข้าชีตให้อัตโนมัติ':L>before?'เลเวลอัป! Lv'+L+' '+rank(L):'บันทึกแล้ว (เก็บสำเนาในเครื่องด้วย): '+RESULTS[pick].label);
     }catch(e){ send.disabled=false; send.textContent='บันทึกผล'; $('#qerr').textContent='บันทึกไม่ได้: '+(e.message||e)+' ลองใหม่อีกครั้ง'; }
+  };
+}
+
+
+// ===================== สมุดบันทึกในเครื่อง =====================
+// เก็บสำเนาทุกการลงพื้นที่ไว้ในเครื่องนี้ (localStorage) ดูย้อนหลังได้แม้ไม่มีสัญญาณ
+// รายการที่ส่งไม่สำเร็จ (status: pending) จะถูกส่งเข้าชีตใหม่อัตโนมัติเมื่อมีสัญญาณ
+const JKEY='vq-journal';
+const journal={
+  all(){return store.get(JKEY)||[]},
+  save(a){store.set(JKEY,a);updateBadge()},
+  add(j){const a=this.all();a.push(j);this.save(a)},
+  pending(){return this.all().filter(j=>j.status==='pending'&&j.player===state.player)},
+  mark(id){const a=this.all();const j=a.find(x=>x.id===id);if(j)j.status='sent';this.save(a)},
+};
+function updateBadge(){const n=journal.pending().length,b=$('#pendBadge');b.hidden=!n;b.textContent=n}
+let syncing=false;
+async function syncPending(){
+  if(syncing||DEMO) return 0; syncing=true; let ok=0;
+  try{
+    for(const j of journal.pending()){
+      try{
+        await api.submit({player:j.player,key:j.key,sheet:j.sheet,contract:j.contract,project:j.project,tambon:j.tambon,result:j.result,amount:j.amount,appt:j.appt,note:j.note});
+        journal.mark(j.id); const e=state.log.find(e=>e.pending===j.id); if(e) delete e.pending; ok++;
+      }catch(err){ if(err&&err.fatal){journal.mark(j.id)} else break; }
+    }
+  }finally{ syncing=false; updateBadge(); }
+  if(ok) toast('ส่งบันทึกที่ค้างในเครื่องเข้าชีตแล้ว '+ok+' รายการ');
+  return ok;
+}
+const monthKey=ts=>{const d=new Date(ts);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')};
+const monthName=k=>{const [y,m]=k.split('-');return new Date(+y,+m-1,1).toLocaleDateString('th-TH',{month:'long',year:'numeric'})};
+function journalCSV(list){
+  const head=['วันที่','เวลา','พัฒนากร','ชีต','เลขที่สัญญา','ชื่อโครงการ','ตำบล','หมู่','ผล','จำนวนเงิน','วันนัด','บันทึก','สถานะส่ง'];
+  const q=v=>{v=String(v??'');if(/^[=+\-@]/.test(v))v="'"+v;return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
+  const rows=list.map(j=>{const d=new Date(j.ts);return [d.toLocaleDateString('th-TH'),d.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}),j.player,j.sheet,j.contract,j.project,j.tambon,j.moo,
+    RESULTS[j.result]?RESULTS[j.result].label:j.result,j.amount||'',j.appt||'',j.note||'',j.status==='pending'?'รอส่ง':'ส่งแล้ว'].map(q).join(',')});
+  return '﻿'+[head.join(','),...rows].join('\n');
+}
+function journalText(list){
+  return list.map(j=>{const d=new Date(j.ts);return d.toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'})+' '+d.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})+
+    ' | '+j.project+' ต.'+j.tambon+(j.moo?' ม.'+j.moo:'')+' | '+(RESULTS[j.result]?RESULTS[j.result].label:j.result)+(+j.amount?' '+baht(j.amount):'')+(j.appt?' นัด '+j.appt:'')+(j.note?' | '+j.note:'')}).join('\n');
+}
+function journalDialog(mk){
+  const mine=journal.all().filter(j=>j.player===state.player).sort((a,b)=>b.ts.localeCompare(a.ts));
+  const months=[...new Set(mine.map(j=>monthKey(j.ts)))];
+  mk=mk||months[0]||monthKey(new Date());
+  const list=mk==='all'?mine:mine.filter(j=>monthKey(j.ts)===mk);
+  const pend=journal.pending().length;
+  const groups={};list.forEach(j=>{const d=new Date(j.ts).toLocaleDateString('th-TH',{weekday:'short',day:'numeric',month:'short',year:'2-digit'});(groups[d]=groups[d]||[]).push(j)});
+  const visits=list.filter(j=>RESULTS[j.result]&&RESULTS[j.result].visit);
+  openModal(`<h2>สมุดบันทึกของ${esc(state.player)}</h2>
+    <p class="sub">เก็บไว้ในเครื่องนี้ เปิดดูได้แม้ไม่มีสัญญาณ${DEMO?' · โหมดทดลอง':''}</p>
+    <select id="jm" aria-label="เดือน">${months.map(m=>`<option value="${m}" ${m===mk?'selected':''}>${monthName(m)}</option>`).join('')}<option value="all" ${mk==='all'?'selected':''}>ทั้งหมด</option></select>
+    <div class="stats">
+      <div class="stat"><b>${list.length}</b><span>ครั้งที่บันทึก</span></div>
+      <div class="stat"><b>${new Set(visits.map(j=>j.key)).size}</b><span>กลุ่มที่เยี่ยม</span></div>
+      <div class="stat"><b>${baht(list.reduce((a,j)=>a+(j.result==='paid'?+j.amount||0:0),0))}</b><span>รับชำระ</span></div>
+      <div class="stat"><b>${list.filter(j=>j.result==='appt').length}</b><span>นัดชำระ</span></div>
+    </div>
+    ${pend?`<p class="err">มี ${pend} รายการยังไม่ได้ส่งเข้าชีต (ไม่มีสัญญาณตอนบันทึก)</p>`:''}
+    ${Object.entries(groups).map(([d,js])=>`<div class="jday">${d}</div><div class="list">${js.map(j=>`<div class="li"><div class="t">${esc(trunc(j.project||'',26))}
+      <span class="chip" style="background:${j.result==='paid'?'#3d9a5b':j.result==='none'?'#9aa0a6':'#4fa3e0'}">${esc(RESULTS[j.result]?RESULTS[j.result].label:j.result)}</span>
+      ${j.status==='pending'?'<span class="chip" style="background:#d93b3b">รอส่ง</span>':''}
+      <small>${new Date(j.ts).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})} น. · ต.${esc(j.tambon)}${j.moo?' ม.'+esc(j.moo):''}${+j.amount?' · '+baht(j.amount):''}${j.appt?' · นัด '+esc(j.appt):''}</small>
+      ${j.note?`<small style="white-space:normal">${esc(j.note)}</small>`:''}</div>
+      <button class="go alt" data-open="${esc(j.key)}">ดู</button></div>`).join('')}</div>`).join('')||'<p class="sub">ยังไม่มีบันทึกในเดือนนี้ ลองเดินไปทำเควสที่บ้านที่มี ! ดูนะ</p>'}
+    <div class="row">${pend&&!DEMO?'<button class="btn pri" id="jsync">ส่งที่ค้าง</button>':''}<button class="btn" id="jcsv">ดาวน์โหลด CSV</button><button class="btn" id="jcopy">คัดลอก</button></div>
+    <div class="row"><button class="btn" data-close>ปิด</button></div>
+    <p class="note">บันทึกในเครื่องจะหายถ้าล้างข้อมูลเบราว์เซอร์หรือเปลี่ยนเครื่อง ข้อมูลหลักอยู่ในชีต "บันทึกติดตาม" เสมอ (ยกเว้นรายการที่ขึ้นว่ารอส่ง) · โทรศัพท์ควรตั้งรหัสล็อกหน้าจอ</p>`);
+  const b=$('#modalBody');
+  b.querySelectorAll('[data-open]').forEach(g=>g.onclick=()=>{const h=houses.find(h=>h.c.key===g.dataset.open);if(h)questDialog(h.c);else toast('ไม่พบสัญญานี้ในชีตแล้ว')});
+  $('#jm').onchange=()=>journalDialog($('#jm').value);
+  const js=$('#jsync'); if(js) js.onclick=async()=>{js.disabled=true;const n=await syncPending();if(!n)toast('ยังส่งไม่ได้ ลองใหม่เมื่อมีสัญญาณ');journalDialog(mk);updateHud()};
+  $('#jcsv').onclick=()=>{
+    try{const blob=new Blob([journalCSV(list)],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');
+      a.href=URL.createObjectURL(blob);a.download='บันทึกเยี่ยม_'+(mk==='all'?'ทั้งหมด':mk)+'.csv';document.body.appendChild(a);a.click();a.remove();
+      setTimeout(()=>URL.revokeObjectURL(a.href),4000);toast('กำลังดาวน์โหลด ถ้าไม่มีไฟล์ขึ้น ให้ใช้ปุ่มคัดลอกแทน');}
+    catch(e){toast('ดาวน์โหลดไม่ได้ในหน้านี้ ใช้ปุ่มคัดลอกแทน')}
+  };
+  $('#jcopy').onclick=()=>{
+    const txt=journalText(list);
+    const fallback=()=>{const ta=document.createElement('textarea');ta.value=txt;ta.style.cssText='width:100%;min-height:120px;margin-top:8px';b.appendChild(ta);ta.focus();ta.select();toast('คัดลอกอัตโนมัติไม่ได้ เลือกข้อความด้านล่างแล้วกดคัดลอกเอง')};
+    try{navigator.clipboard.writeText(txt).then(()=>toast('คัดลอกแล้ว วางในไลน์หรือโน้ตได้เลย'),fallback)}catch(e){fallback()}
   };
 }
 
@@ -678,8 +775,9 @@ async function loadData(keepPos){
   const res=await api.load();
   const px=player.x,py=player.y;
   state.contracts=res.rows.map(r=>parseRow(r.sheet,r.v)).filter(Boolean);
-  state.log=res.log||[];
+  state.log=(res.log||[]).concat(journal.pending().map(j=>({ts:j.ts,player:j.player,key:j.key,result:j.result,amount:j.amount,appt:j.appt,note:j.note,exp:j.exp,pending:j.id})));
   buildWorld(); resize();
+  setTimeout(syncPending,800);
   if(keepPos) warpTo(px,py);
   updateHud();
 }

@@ -38,10 +38,13 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .bar.team i{background:var(--ok)}
 .me-row{display:flex;justify-content:space-between;font-size:11.5px;margin-top:3px;font-variant-numeric:tabular-nums;gap:8px}
 .tr{position:absolute;top:calc(10px + env(safe-area-inset-top,0px));right:calc(10px + env(safe-area-inset-right,0px));display:flex;gap:8px;align-items:flex-start}
-.zcol{display:flex;flex-direction:column;gap:8px}
+/* แถบเมนูด้านล่าง */
+.toolbar{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:center;gap:6px;background:rgba(255,253,245,.92);border-top:2px solid var(--ink);
+  padding:8px max(10px,env(safe-area-inset-right,0px)) calc(8px + env(safe-area-inset-bottom,0px)) max(10px,env(safe-area-inset-left,0px))}
+.toolbar .ibtn{flex:1 1 0;min-width:0;max-width:88px;height:48px;font-size:14px}
 .ibtn{width:46px;height:44px;border-radius:12px;border:2px solid var(--ink);background:var(--paper);box-shadow:0 3px 0 var(--ink);font-size:13px;font-weight:500;line-height:1;color:var(--ink);padding:0}
 #zOut,#zIn{font-size:24px}
-#zAll{font-size:11px}
+#zAll{font-size:12px}
 .ibtn{position:relative}
 .badge{position:absolute;top:-7px;right:-7px;min-width:18px;height:18px;border-radius:9px;background:#d93b3b;color:#fff;font-size:11px;line-height:18px;padding:0 4px;box-sizing:border-box}
 .jday{font-size:13px;font-weight:500;color:var(--muted);margin:10px 0 4px}
@@ -53,9 +56,9 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .joy{position:absolute;left:calc(22px + env(safe-area-inset-left,0px));bottom:calc(22px + env(safe-area-inset-bottom,0px));
   width:130px;height:130px;border-radius:50%;background:rgba(255,255,255,.28);border:2px solid rgba(255,255,255,.6);touch-action:none}
 .knob{position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px 0 0 -28px;border-radius:50%;background:#fff;box-shadow:0 3px 8px rgba(0,0,0,.25)}
-.me-btn{position:absolute;left:calc(18px + env(safe-area-inset-left,0px));bottom:calc(30px + env(safe-area-inset-bottom,0px));width:auto;height:auto;padding:8px 14px;font-size:14px;line-height:1.2}
-.act{position:absolute;right:calc(22px + env(safe-area-inset-right,0px));bottom:calc(26px + env(safe-area-inset-bottom,0px));
-  width:96px;height:96px;border-radius:50%;border:3px solid var(--ink);background:var(--hp);color:#fff;font-size:16px;font-weight:600;
+.me-btn{position:absolute;left:calc(16px + env(safe-area-inset-left,0px));bottom:calc(84px + env(safe-area-inset-bottom,0px));width:auto;height:auto;padding:8px 14px;font-size:14px;line-height:1.2}
+.act{position:absolute;right:calc(16px + env(safe-area-inset-right,0px));bottom:calc(82px + env(safe-area-inset-bottom,0px));
+  width:84px;height:84px;border-radius:50%;border:3px solid var(--ink);background:var(--hp);color:#fff;font-size:16px;font-weight:600;
   box-shadow:0 4px 0 var(--ink);transition:background .2s,opacity .2s;padding:4px;line-height:1.15}
 .act[data-on="0"]{background:#b9b3a1;opacity:.85}
 .act:active{transform:translateY(3px);box-shadow:0 1px 0 var(--ink)}
@@ -114,7 +117,7 @@ td .go{padding:3px 8px;font-size:12px}
 .ychips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
 .ybtn{border:2px solid var(--yc);background:#fff;color:var(--yc);border-radius:999px;padding:3px 12px;font-size:14px;font-weight:500}
 .ybtn[aria-pressed="true"]{background:var(--yc);color:#fff}
-.fchip{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(150px + env(safe-area-inset-bottom,0px));display:flex;align-items:center;gap:8px;max-width:calc(100% - 40px);box-sizing:border-box;background:rgba(36,50,31,.9);color:#fff;border-radius:999px;padding:5px 6px 5px 14px;font-size:13px}
+.fchip{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(190px + env(safe-area-inset-bottom,0px));display:flex;align-items:center;gap:8px;max-width:calc(100% - 40px);box-sizing:border-box;background:rgba(36,50,31,.9);color:#fff;border-radius:999px;padding:5px 6px 5px 14px;font-size:13px}
 .fchip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .fchip button{flex:none;border:0;background:#fff;color:var(--ink);border-radius:50%;width:26px;height:26px;font-size:14px;padding:0}
 .peek-year{display:inline-block;color:#fff;font-size:22px;font-weight:600;border-radius:12px;padding:4px 14px;margin:6px 0 10px}
@@ -144,16 +147,16 @@ td .go{padding:3px 8px;font-size:12px}
     <div class="me-row"><span>เยี่ยมเดือนนี้</span><span id="teamTxt">0 / 0</span></div>
   </div>
   <div class="tr">
-    <div class="zcol">
+    <canvas id="mini" width="208" height="208" aria-label="แผนที่ย่อ"></canvas>
+  </div>
+  <nav class="toolbar" aria-label="เมนู">
       <button class="ibtn" id="btnList" aria-label="ค้นหากลุ่ม">ค้นหา</button>
       <button class="ibtn" id="btnSum" aria-label="สรุปข้อมูลกลุ่ม">สรุป</button>
       <button class="ibtn" id="btnBook" aria-label="สมุดบันทึกในเครื่อง">สมุด<span class="badge" id="pendBadge" hidden>0</span></button>
       <button class="ibtn" id="zOut" aria-label="ซูมออก ดูภาพกว้าง">−</button>
       <button class="ibtn" id="zIn" aria-label="ซูมเข้า">+</button>
       <button class="ibtn" id="zAll" aria-label="ดูทั้งอำเภอ">ทั้ง<br>แผนที่</button>
-    </div>
-    <canvas id="mini" width="208" height="208" aria-label="แผนที่ย่อ"></canvas>
-  </div>
+  </nav>
   <div class="demo" id="demoTag" hidden>ข้อมูลตัวอย่าง</div>
   <div class="fchip" id="fchip" hidden><span id="fchipTxt"></span><button id="fchipX" aria-label="ล้างตัวกรองแผนที่">✕</button></div>
   <div class="joy" id="joy" aria-hidden="true" hidden><div class="knob" id="knob"></div></div>

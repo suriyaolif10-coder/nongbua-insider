@@ -1,0 +1,1080 @@
+<!doctype html>
+<html lang="th">
+<head>
+<title>พัฒนากรออกเควส</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mitr:wght@300;400;500;600&display=swap">
+<style>
+/* Layout: full-screen canvas map of the district; one village cluster per ตำบล around the district office. HUD floats in the corners. Single daytime look, so colors are fixed. */
+:root{
+  --grass:#7cc06a; --ink:#24321f; --paper:#fffdf5; --paper-2:#f3eedc;
+  --wood:#8a5a32; --gold:#f2b632; --exp:#4fa3e0; --hp:#e2586a;
+  --ok:#3d9a5b; --warn:#d98a1c; --muted:#6c7562;
+  --font:'Mitr','Noto Sans Thai','Leelawadee UI',Tahoma,sans-serif;
+  color-scheme:light;
+}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0;overflow:hidden;background:var(--grass);color:var(--ink);font-family:var(--font);
+  -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:none}
+canvas#game{position:fixed;inset:0;width:100%;height:100%;display:block}
+button,select{font-family:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--exp);outline-offset:2px}
+
+/* HUD */
+.hud{position:fixed;inset:0;pointer-events:none}
+.hud > *{pointer-events:auto}
+.me{position:absolute;top:calc(10px + env(safe-area-inset-top,0px));left:calc(10px + env(safe-area-inset-left,0px));
+  background:rgba(255,253,245,.92);border:2px solid var(--ink);border-radius:14px;padding:8px 12px 10px;width:230px;max-width:58vw;
+  box-shadow:0 3px 0 var(--ink);box-sizing:border-box}
+.me-top{display:flex;align-items:center;gap:8px}
+.ava{flex:none;width:34px;height:34px;border-radius:50%;background:var(--gold);border:2px solid var(--ink);display:grid;place-items:center;font-weight:600}
+.me-name{font-weight:500;font-size:15px;line-height:1.1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.me-lv{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar{height:9px;border-radius:6px;background:#d9d3bf;border:1.5px solid var(--ink);overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;background:var(--exp);transition:width .4s}
+.bar.team i{background:var(--ok)}
+.me-row{display:flex;justify-content:space-between;font-size:11.5px;margin-top:3px;font-variant-numeric:tabular-nums;gap:8px}
+.tr{position:absolute;top:calc(10px + env(safe-area-inset-top,0px));right:calc(10px + env(safe-area-inset-right,0px));display:flex;gap:8px;align-items:flex-start}
+/* แถบเมนูด้านล่าง */
+.toolbar{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:center;gap:6px;background:rgba(255,253,245,.92);border-top:2px solid var(--ink);
+  padding:8px max(10px,env(safe-area-inset-right,0px)) calc(8px + env(safe-area-inset-bottom,0px)) max(10px,env(safe-area-inset-left,0px))}
+.toolbar .ibtn{flex:1 1 0;min-width:0;max-width:88px;height:48px;font-size:14px}
+.ibtn{width:46px;height:44px;border-radius:12px;border:2px solid var(--ink);background:var(--paper);box-shadow:0 3px 0 var(--ink);font-size:13px;font-weight:500;line-height:1;color:var(--ink);padding:0}
+#zOut,#zIn{font-size:24px}
+#zAll{font-size:12px}
+.ibtn{position:relative}
+.badge{position:absolute;top:-7px;right:-7px;min-width:18px;height:18px;border-radius:9px;background:#d93b3b;color:#fff;font-size:11px;line-height:18px;padding:0 4px;box-sizing:border-box}
+.jday{font-size:13px;font-weight:500;color:var(--muted);margin:10px 0 4px}
+.jt{font-size:12px;color:var(--muted)}
+.ibtn:active{transform:translateY(2px);box-shadow:0 1px 0 var(--ink)}
+#mini{width:104px;height:104px;border-radius:50%;border:3px solid var(--gold);background:#9fd38c;box-shadow:0 3px 0 var(--ink)}
+.demo{position:absolute;top:calc(122px + env(safe-area-inset-top,0px));right:calc(14px + env(safe-area-inset-right,0px));
+  background:var(--warn);color:#fff;font-size:11px;padding:3px 8px;border-radius:8px}
+.joy{position:absolute;left:calc(22px + env(safe-area-inset-left,0px));bottom:calc(22px + env(safe-area-inset-bottom,0px));
+  width:130px;height:130px;border-radius:50%;background:rgba(255,255,255,.28);border:2px solid rgba(255,255,255,.6);touch-action:none}
+.knob{position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px 0 0 -28px;border-radius:50%;background:#fff;box-shadow:0 3px 8px rgba(0,0,0,.25)}
+.me-btn{position:absolute;left:calc(16px + env(safe-area-inset-left,0px));bottom:calc(84px + env(safe-area-inset-bottom,0px));width:auto;height:auto;padding:8px 14px;font-size:14px;line-height:1.2}
+.act{position:absolute;right:calc(16px + env(safe-area-inset-right,0px));bottom:calc(82px + env(safe-area-inset-bottom,0px));
+  width:84px;height:84px;border-radius:50%;border:3px solid var(--ink);background:var(--hp);color:#fff;font-size:16px;font-weight:600;
+  box-shadow:0 4px 0 var(--ink);transition:background .2s,opacity .2s;padding:4px;line-height:1.15}
+.act[data-on="0"]{background:#b9b3a1;opacity:.85}
+.act:active{transform:translateY(3px);box-shadow:0 1px 0 var(--ink)}
+.toast{position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top,0px));transform:translateX(-50%);background:rgba(36,50,31,.92);color:#fff;
+  padding:8px 14px;border-radius:10px;font-size:14px;max-width:80vw;text-align:center;transition:opacity .3s;opacity:0;pointer-events:none;z-index:30}
+.toast.show{opacity:1}
+
+/* Panels */
+.veil{position:fixed;inset:0;background:rgba(20,30,15,.45);display:grid;place-items:center;z-index:20;
+  padding:12px max(16px,env(safe-area-inset-right,0px)) 12px max(16px,env(safe-area-inset-left,0px))}
+.panel{background:var(--paper);border:3px solid var(--ink);border-radius:18px;box-shadow:0 6px 0 var(--ink);width:min(520px,100%);box-sizing:border-box;
+  max-height:calc(100dvh - 30px);overflow:auto;padding:16px 16px 14px;-webkit-user-select:text;user-select:text;touch-action:auto}
+.panel h2{margin:0 0 2px;font-size:20px;font-weight:600;text-wrap:balance}
+.panel h3{margin:14px 0 6px;font-size:15px;font-weight:500}
+.sub{color:var(--muted);font-size:13px;margin:0 0 10px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:14px;background:var(--paper-2);border-radius:10px;padding:10px 12px;margin-bottom:10px}
+.kv b{font-weight:500;color:var(--muted);white-space:nowrap}
+.kv span{font-variant-numeric:tabular-nums;min-width:0;overflow-wrap:anywhere}
+.opts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.opt{border:2px solid var(--ink);border-radius:12px;background:#fff;padding:8px;text-align:left;font-size:14px;line-height:1.25;color:var(--ink)}
+.opt small{display:block;color:var(--muted);font-size:11.5px}
+.opt[aria-pressed="true"]{background:var(--gold);box-shadow:inset 0 -3px 0 rgba(0,0,0,.15)}
+label.f{display:block;font-size:13px;color:var(--muted);margin:6px 0 4px}
+.panel input,.panel textarea,.panel select{width:100%;box-sizing:border-box;font:inherit;font-size:16px;border:2px solid var(--ink);border-radius:10px;padding:7px 10px;background:#fff;color:var(--ink)}
+.panel textarea{min-height:56px;resize:vertical}
+.row{display:flex;gap:8px;margin-top:12px}
+.btn{flex:1;border:2px solid var(--ink);border-radius:12px;padding:10px;font-size:16px;font-weight:500;background:#fff;box-shadow:0 3px 0 var(--ink);color:var(--ink)}
+.btn.pri{background:var(--ok);color:#fff}
+.btn:disabled{opacity:.5}
+.list{display:flex;flex-direction:column;gap:6px}
+.li{display:flex;align-items:center;gap:8px;border:2px solid var(--ink);border-radius:12px;padding:7px 10px;background:#fff}
+.li .t{flex:1;min-width:0;font-size:14px}
+.li .t small{display:block;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip{display:inline-block;font-size:11px;padding:1px 8px;border-radius:999px;color:#fff;white-space:nowrap;vertical-align:1px}
+.go{flex:none;border:2px solid var(--ink);border-radius:10px;background:var(--exp);color:#fff;padding:6px 10px;font-size:13px}
+.go.alt{background:#fff;color:var(--ink)}
+.note{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.5}
+.err{color:#b3261e;font-size:13px;min-height:18px;margin-top:4px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin:8px 0}
+.stat{background:var(--paper-2);border-radius:10px;padding:8px 10px}
+.stat b{display:block;font-size:17px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.2}
+.stat span{font-size:12px;color:var(--muted)}
+.sbar{display:flex;height:16px;border-radius:8px;overflow:hidden;border:2px solid var(--ink);margin:6px 0}
+.sbar i{display:block;height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px}
+.legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--c);margin-right:4px;vertical-align:-1px}
+.tbl{overflow-x:auto;border:2px solid var(--ink);border-radius:12px;background:#fff}
+table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+th,td{padding:6px 8px;text-align:right;white-space:nowrap;border-bottom:1px solid #e6e0cc}
+th:first-child,td:first-child{text-align:left}
+th{font-weight:500;color:var(--muted);background:var(--paper-2)}
+tr:last-child td{border-bottom:0}
+td .go{padding:3px 8px;font-size:12px}
+.filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:8px}
+.ylabel{font-size:13px;color:var(--muted);margin-bottom:4px}
+.ychips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.ybtn{border:2px solid var(--yc);background:#fff;color:var(--yc);border-radius:999px;padding:3px 12px;font-size:14px;font-weight:500}
+.ybtn[aria-pressed="true"]{background:var(--yc);color:#fff}
+.fchip{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(190px + env(safe-area-inset-bottom,0px));display:flex;align-items:center;gap:8px;max-width:calc(100% - 40px);box-sizing:border-box;background:rgba(36,50,31,.9);color:#fff;border-radius:999px;padding:5px 6px 5px 14px;font-size:13px}
+.fchip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.fchip button{flex:none;border:0;background:#fff;color:var(--ink);border-radius:50%;width:26px;height:26px;font-size:14px;padding:0}
+.peek-year{display:inline-block;color:#fff;font-size:22px;font-weight:600;border-radius:12px;padding:4px 14px;margin:6px 0 10px}
+.ychip{display:inline-block;color:#fff;border-radius:6px;padding:0 6px;font-size:12px}
+.chk{display:flex;align-items:center;gap:6px;font-size:13px;margin-bottom:8px}
+.chk input{width:auto}
+.hist{font-size:12.5px;line-height:1.5;color:var(--ink);background:var(--paper-2);border-radius:10px;padding:8px 10px;margin-bottom:10px}
+.hist div+div{border-top:1px dashed #cfc7ac;margin-top:4px;padding-top:4px}
+
+/* Login */
+.login .panel{text-align:center;width:min(420px,100%)}
+.logo{font-size:30px;font-weight:600;line-height:1.1;margin:4px 0 4px;color:var(--wood)}
+.login .panel input{text-align:center;margin-bottom:4px}
+/* โทรศัพท์แนวนอน: ย่อ HUD ให้เห็นแผนที่มากที่สุด */
+@media (orientation:landscape) and (max-height:540px){
+  .me{width:200px;padding:5px 10px 7px;border-radius:12px}
+  .ava{width:28px;height:28px;font-size:13px}
+  .me-name{font-size:14px}.me-lv{font-size:11px}
+  .bar{height:7px;margin-top:4px}.me-row{font-size:10.5px;margin-top:1px}
+  #mini{width:84px;height:84px}
+  .demo{top:calc(100px + env(safe-area-inset-top,0px))}
+  .toolbar{padding-top:5px;padding-bottom:calc(5px + env(safe-area-inset-bottom,0px))}
+  .toolbar .ibtn{height:38px;max-width:100px;font-size:13px}
+  #zOut,#zIn{font-size:20px}#zAll{font-size:11px}
+  .act{width:72px;height:72px;font-size:14px;bottom:calc(60px + env(safe-area-inset-bottom,0px))}
+  .me-btn{bottom:calc(60px + env(safe-area-inset-bottom,0px));padding:6px 12px;font-size:13px}
+  .fchip{bottom:calc(62px + env(safe-area-inset-bottom,0px))}
+  .panel{max-height:calc(100dvh - 16px);padding:12px 14px}
+  .veil{padding-top:6px;padding-bottom:6px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<canvas id="game" aria-label="แผนที่อำเภอ"></canvas>
+
+<div class="hud" id="hud" hidden>
+  <div class="me">
+    <div class="me-top"><div class="ava" id="ava">?</div>
+      <div style="min-width:0"><div class="me-name" id="meName">-</div><div class="me-lv" id="meLv">-</div></div></div>
+    <div class="bar"><i id="expBar" style="width:0%"></i></div>
+    <div class="me-row"><span>EXP</span><span id="expTxt">0 / 40</span></div>
+    <div class="bar team"><i id="teamBar" style="width:0%"></i></div>
+    <div class="me-row"><span>เยี่ยมเดือนนี้</span><span id="teamTxt">0 / 0</span></div>
+  </div>
+  <div class="tr">
+    <canvas id="mini" width="208" height="208" aria-label="แผนที่ย่อ"></canvas>
+  </div>
+  <nav class="toolbar" aria-label="เมนู">
+      <button class="ibtn" id="btnList" aria-label="ค้นหากลุ่ม">ค้นหา</button>
+      <button class="ibtn" id="btnSum" aria-label="สรุปข้อมูลกลุ่ม">สรุป</button>
+      <button class="ibtn" id="btnBook" aria-label="สมุดบันทึกในเครื่อง">สมุด<span class="badge" id="pendBadge" hidden>0</span></button>
+      <button class="ibtn" id="zOut" aria-label="ซูมออก ดูภาพกว้าง">−</button>
+      <button class="ibtn" id="zIn" aria-label="ซูมเข้า">+</button>
+      <button class="ibtn" id="zAll" aria-label="ดูทั้งอำเภอ">ทั้ง<br>แผนที่</button>
+  </nav>
+  <div class="demo" id="demoTag" hidden>ข้อมูลตัวอย่าง</div>
+  <div class="fchip" id="fchip" hidden><span id="fchipTxt"></span><button id="fchipX" aria-label="ล้างตัวกรองแผนที่">✕</button></div>
+  <div class="joy" id="joy" aria-hidden="true" hidden><div class="knob" id="knob"></div></div>
+  <button class="act" id="act" data-on="0">สำรวจ</button>
+  <button class="ibtn me-btn" id="btnMe" hidden>กลับไป<br>ที่ตัวฉัน</button>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<div class="veil login" id="login">
+  <form class="panel" id="loginForm" autocomplete="off">
+    <div class="logo">พัฒนากรออกเควส</div>
+    <p class="sub">ติดตามหนี้กองทุนพัฒนาบทบาทสตรี</p>
+    <label class="f" for="inName">ชื่อพัฒนากร</label>
+    <input id="inName" maxlength="30" placeholder="เช่น สมหญิง" required>
+    <div class="err" id="loginErr"></div>
+    <div class="row"><button class="btn pri" id="btnStart" type="submit">เริ่มเควส</button></div>
+    <div class="row"><button class="btn" id="btnLand" type="button">เล่นแนวนอนเต็มจอ</button></div>
+    <p class="note" id="loginNote"></p>
+  </form>
+</div>
+
+<div class="veil" id="modal" hidden><div class="panel" id="modalBody" role="dialog" aria-modal="true"></div></div>
+
+<script>
+// ===================== กติกา =====================
+// สถานะการชำระหนี้จากชีต → ความเร่งด่วนของเควส (ตรวจตามลำดับ)
+const STATUS=[
+  {key:'paid', test:s=>s.includes('ครบ'),                        label:'ชำระครบ',          color:'#3d9a5b', pr:9},
+  {key:'d2',   test:s=>s.includes('ทวงถาม')&&/2|สอง/.test(s),     label:'ทวงถามครั้งที่ 2',  color:'#d93b3b', pr:1},
+  {key:'d1',   test:s=>s.includes('ทวงถาม'),                     label:'ทวงถามครั้งที่ 1',  color:'#ee7a2a', pr:2},
+  {key:'late', test:s=>s.includes('ค้าง'),                        label:'ค้างชำระ',          color:'#e8a317', pr:3},
+  {key:'rs',   test:s=>s.includes('ปรับโครงสร้าง'),                label:'ปรับโครงสร้างหนี้', color:'#8e5aa8', pr:4},
+  {key:'wait', test:()=>true,                                    label:'รอชำระ',            color:'#4fa3e0', pr:5},
+];
+const ST=Object.fromEntries(STATUS.map(s=>[s.key,s]));
+function statusOf(s){return STATUS.find(x=>x.test(s||''))}
+// ผลการลงพื้นที่: EXP และนับว่า "เยี่ยมแล้วเดือนนี้" หรือไม่ (ต้องตรงกับ Code.gs)
+const RESULTS={
+  paid:  {label:'รับชำระเงิน',          hint:'ได้รับเงินงวด',             exp:50, visit:true},
+  appt:  {label:'นัดชำระ',              hint:'ตกลงวันจ่าย',               exp:30, visit:true},
+  letter:{label:'แจ้งหนังสือทวงถาม',     hint:'ส่ง/อธิบายหนังสือ',         exp:20, visit:true},
+  rs:    {label:'เสนอปรับโครงสร้างหนี้',  hint:'ลำบากจริง ส่งคณะกรรมการ',    exp:20, visit:true},
+  visit: {label:'เยี่ยมติดตามกลุ่ม',      hint:'ดูกิจการ ให้คำแนะนำ',        exp:15, visit:true},
+  none:  {label:'ไม่พบผู้กู้',            hint:'มาใหม่ภายหลัง',             exp:10, visit:false},
+};
+// ตำบลที่รู้จักล่วงหน้า (ใช้เฉพาะแถวที่ที่อยู่ไม่มีคำว่า ต./ตำบล) อำเภออื่นเกมจะเรียนรู้ชื่อตำบลจากข้อมูลเอง
+const TAMBON_HINTS={'โนนสัง':['บ้านถิ่น','หนองเรือ','กุดดู่','บ้านค้อ','โนนเมือง','โคกใหญ่','โคกม่วง','นิคมพัฒนา','ปางกู่','โนนสัง']};
+const TAMBON_ALIAS={'โตกใหญ่':'โคกใหญ่'};
+
+// ===================== ข้อมูล =====================
+const GAS = !!(window.google && google.script && google.script.run);
+const DEMO = !GAS;
+const store = {
+  get(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } },
+  set(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} },
+};
+function gasCall(fn,...args){return new Promise((res,rej)=>google.script.run.withSuccessHandler(res).withFailureHandler(rej)[fn](...args))}
+function demoRows(){ // ข้อมูลสมมติ โครงสร้างเหมือนชีตจริง ไม่มีชื่อคนจริง
+  const R=rng(7), tbs=[['บ้านถิ่น',30],['กุดดู่',24],['โคกใหญ่',22],['หนองเรือ',14],['บ้านค้อ',12],['นิคมพัฒนา',9],['โนนเมือง',8],['โนนสัง',8],['โคกม่วง',5],['ปางกู่',4]];
+  const pj=['ทอผ้ามัดหมี่','ทอผ้าพื้นเมือง','แปรรูปปลา','ปลูกเห็ดฟาง','ทำไม้กวาดดอกหญ้า','เลี้ยงโค','ขนมไทย','สานตะกร้า','เย็บผ้า','ปลาร้าข้ามปี'];
+  const st=[['รอชำระ',52],['ทวงถามครั้งที่ 2',26],['ทวงถามครั้งที่ 1',7],['ค้างชำระ',4],['ปรับโครงสร้าง ตามประกาศรอบที่ 1',4],['ชำระครบตามสัญญา',7]];
+  const pick=()=>{let r=R()*100;for(const [s,w] of st){if((r-=w)<0)return s}return 'รอชำระ'};
+  const rows=[];let n=0;
+  tbs.forEach(([tb,c])=>{for(let i=0;i<c;i++){n++;const y=60+Math.floor(R()*8);const m=1+Math.floor(R()*14);
+    rows.push({sheet:'ปี '+y,v:['หนองบัวลำภู','โนนสัง','25'+y,'DEMO-'+String(n).padStart(4,'0'),pj[Math.floor(R()*pj.length)]+(R()<.4?' บ้านตัวอย่าง':''),
+      'สมาชิกตัวอย่าง '+n,'ม.'+m+' ต.'+tb+' อ.โนนสัง (ข้อมูลตัวอย่าง)',(Math.round((60+R()*140))*1000).toLocaleString('en-US')+'.00',pick(),R()<.6?'เปิดโครงการ':'ปิดโครงการ']})}});
+  return rows;
+}
+const api = {
+  async load(){
+    if(GAS){ const r=await gasCall('apiLoad'); if(!r||!r.ok) throw new Error((r&&r.error)||'โหลดข้อมูลไม่ได้'); return r; }
+    return {ok:true, rows:demoRows(), sheets:['ปี 60','ปี 61','ปี62','ปี 63','ปี 64','ปี 65','ปี 66','ปี 67','ปี 68','ปี 69','ปี 70'], log:store.get('vq2-demo-log')||[]};
+  },
+  async submit(p){
+    if(GAS){ const r=await gasCall('apiSubmit',p); if(!r||!r.ok){const e=new Error((r&&r.error)||'บันทึกไม่สำเร็จ');e.fatal=true;throw e} return r.entry; }
+    const entry={ts:new Date().toISOString(),player:p.player,key:p.key,result:p.result,amount:p.amount,appt:p.appt,note:p.note,exp:RESULTS[p.result].exp};
+    const log=store.get('vq2-demo-log')||[]; log.push(entry); store.set('vq2-demo-log',log); return entry;
+  }
+};
+function parseRow(sheet,v){
+  const f=i=>String(v[i]??'').replace(/\s+/g,' ').trim();
+  const contract=f(3), project=f(4); if(!contract&&!project) return null;
+  const addr=f(6);
+  let tb=(addr.match(/(?:ต\.|ตำบล)\s*([ก-๙]+)/)||[])[1];
+  if(tb) tb=TAMBON_ALIAS[tb]||tb;
+  const moo=(addr.match(/(?:ม\.|หมู่ที่|หมู่)\s*(\d+)/)||[])[1]||'';
+  const vil=(addr.match(/หมู่บ้าน\s*(บ้าน[ก-๙]+)/)||addr.match(/(บ้าน(?!เลขที่)[ก-๙]+)\s*(?:ม\.|หมู่)/)||[])[1]||'';
+  const pay=f(8);
+  return {key:sheet+'|'+contract, sheet, prov:f(0), amp:f(1).replace(/^(อ\.|อำเภอ)\s*/,''), year:f(2), contract, project:project||'(ไม่มีชื่อโครงการ)', proposer:f(5), addr, tambon:tb, moo, vil,
+    loan:parseFloat(f(7).replace(/,/g,''))||0, pay, proj:f(9), st:statusOf(pay)};
+}
+
+// ตั้งชื่อพื้นที่ตามข้อมูลในชีต (อำเภอ/จังหวัด) และเติมตำบลให้แถวที่ที่อยู่ไม่มี ต.
+let AREA='';
+// ชื่อแท็บ "ปี 68" → ปีงบ "2568" (ใช้แสดงปีที่ยังไม่มีข้อมูลด้วย)
+function sheetToYear(n){const m=String(n).match(/(\d{2,4})/);if(!m)return '';const d=m[1];return d.length===2?'25'+d:d}
+function allYears(){return [...new Set([...state.all.map(c=>c.year),...(state.sheetYears||[])].filter(Boolean))].sort()}
+function resolveArea(list){
+  const amps=[...new Set(list.map(c=>c.amp).filter(Boolean))];
+  const provs=[...new Set(list.map(c=>c.prov).filter(Boolean))];
+  const learned={};list.forEach(c=>{if(c.tambon)(learned[c.amp]=learned[c.amp]||new Set()).add(c.tambon)});
+  list.forEach(c=>{
+    if(!c.tambon){
+      const a2=c.addr.replace(/(?:อ\.|อำเภอ)\s*[ก-๙]+/g,'').replace(/(?:จ\.|จังหวัด)\s*[ก-๙]+/g,'');
+      const cand=[...(learned[c.amp]||[]),...(TAMBON_HINTS[c.amp]||[])].sort((a,b)=>b.length-a.length);
+      c.tambon=cand.find(k=>a2.includes(k))||'ไม่ระบุตำบล';
+    }
+    if(amps.length>1) c.tambon=c.tambon+' (อ.'+(c.amp||'?')+')'; // หลายอำเภอในไฟล์เดียว กันชื่อตำบลซ้ำ
+  });
+  AREA=amps.length===1?'อ.'+amps[0]+(provs.length===1?' จ.'+provs[0]:''):amps.length>1?amps.length+' อำเภอ':'';
+  const sub=document.querySelector('#login .sub'); if(sub) sub.textContent='ติดตามหนี้กองทุนพัฒนาบทบาทสตรี'+(AREA?' '+AREA:'');
+  return list;
+}
+
+// ===================== สถานะเกม =====================
+const state={player:'',all:[],contracts:[],log:[],tracked:null,running:false};
+// ไม่นำกลุ่มที่ "ปิดโครงการ" ขึ้นแผนที่เลย (ไม่มีปุ่มสลับ) · ระวัง: คำว่า "เปิด" มี "ปิด" อยู่ข้างใน
+const isClosed=c=>/ปิด/.test(c.proj)&&!/เปิด/.test(c.proj);
+state.onlyOpen=true; // ค่าคงที่ตามที่ผู้ใช้กำหนด
+function applyScope(keepPos){
+  const px=player.x,py=player.y;
+  state.contracts=state.onlyOpen?state.all.filter(c=>!isClosed(c)):state.all.slice();
+  buildWorld(); resize();
+  if(keepPos) warpTo(px,py);
+  if(state.running){updateHud();updateFilterChip()}
+}
+function scopeText(){const n=state.all.filter(isClosed).length;return 'ไม่รวมกลุ่มที่ปิดโครงการ'+(n?' '+n+' กลุ่ม':'')}
+let W=2400,H=1600;
+const player={x:0,y:0,dir:1,walking:false};
+const YEAR_COLORS=['#5b6abf','#1f8a9e','#2f8f6b','#7a9a1f','#c98a12','#c8553d','#b2456e','#7d4fb0','#5b4630','#3f7cac','#d4572a','#2a8c8c','#8a6d1e','#a03e8f'];
+let yearColor={};
+const yy=y=>String(y).slice(-2);
+let houses=[],clusters=[],hub=null,trees=[],decor=[],roads=[],floats=[],npcs=[];
+
+function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const sameMonth=ts=>{const d=new Date(ts),n=new Date();return d.getFullYear()===n.getFullYear()&&d.getMonth()===n.getMonth()};
+function visitedThisMonth(c){return state.log.some(e=>e.key===c.key&&RESULTS[e.result]&&RESULTS[e.result].visit&&sameMonth(e.ts))}
+function myExp(){return state.log.filter(e=>e.player===state.player).reduce((a,e)=>a+(+e.exp||0),0)}
+function needsVisit(c){return c.st.key!=='paid'}
+
+function buildWorld(){
+  const by={};
+  state.contracts.forEach(c=>(by[c.tambon]=by[c.tambon]||[]).push(c));
+  const names=Object.keys(by).sort((a,b)=>(a==='ไม่ระบุตำบล')-(b==='ไม่ระบุตำบล')||by[b].length-by[a].length);
+  const maxN=Math.max(1,...names.map(n=>by[n].length));
+  const SX=150,SY=172; // ระยะห่างบ้าน (ย่อให้แผนที่กะทัดรัด)
+  const slotsFor=(gc,gr,cx,cy)=>{const s=[];for(let r=0;r<gr;r++)for(let c=0;c<gc;c++){
+      const x=cx-(gc-1)*SX/2+c*SX, y=cy-(gr-1)*SY/2+r*SY+50;
+      if(Math.abs(x-cx)<SX*.95&&Math.abs(y-cy)<SY*.75) continue; s.push({x,y});}
+    return s.sort((a,b)=>Math.hypot(a.x-cx,(a.y-cy)*1.2)-Math.hypot(b.x-cx,(b.y-cy)*1.2));};
+  let gc=5; while(slotsFor(gc,gc-1,0,0).length<maxN) gc++;
+  const gr=gc-1, CW=gc*SX+90, CH=gr*SY+150;
+  const n=names.length+1, cols=Math.ceil(Math.sqrt(n)), rows=Math.ceil(n/cols);
+  W=cols*CW; H=rows*CH;
+  const cells=[];for(let r=0;r<rows;r++)for(let c=0;c<cols;c++)cells.push({x:c*CW+CW/2,y:r*CH+CH/2});
+  const hc=cells[Math.floor((rows-1)/2)*cols+Math.floor((cols-1)/2)];
+  const rest=cells.filter(c=>c!==hc).sort((a,b)=>Math.hypot(a.x-hc.x,a.y-hc.y)-Math.hypot(b.x-hc.x,b.y-hc.y));
+  hub={x:hc.x,y:hc.y};
+  const roofs=['#c8553d','#3f7cac','#8e5aa8','#d98a1c','#2f8f6b','#b2456e'];
+  houses=[];clusters=[];roads=[];
+  const yrs=allYears();
+  yearColor={};yrs.forEach((y,i)=>yearColor[y]=YEAR_COLORS[i%YEAR_COLORS.length]);
+  names.forEach((name,i)=>{
+    const cell=rest[i], items=by[name].slice().sort((a,b)=>(+a.moo||99)-(+b.moo||99)||a.project.localeCompare(b.project,'th'));
+    const slots=slotsFor(gc,gr,cell.x,cell.y);
+    const cl={name,x:cell.x,y:cell.y,items};clusters.push(cl);
+    roads.push([hub.x,hub.y,cl.x,cl.y]);
+    items.forEach((c,j)=>{const s=slots[j];houses.push({c,cl,x:s.x,y:s.y,roof:roofs[(+c.moo||j)%roofs.length]})});
+  });
+  const R=rng(42);trees=[];decor=[];
+  const segD=(px,py,[x1,y1,x2,y2])=>{const dx=x2-x1,dy=y2-y1,t=Math.max(0,Math.min(1,((px-x1)*dx+(py-y1)*dy)/(dx*dx+dy*dy||1)));return Math.hypot(px-x1-t*dx,py-y1-t*dy)};
+  const target=Math.min(700,Math.round(W*H/30000));
+  for(let k=0;k<target*5&&trees.length<target;k++){
+    const x=40+R()*(W-80),y=60+R()*(H-100);
+    if(Math.hypot(x-hub.x,(y-hub.y)*1.3)<330) continue;
+    if(clusters.some(c=>Math.hypot(x-c.x,(y-c.y)*1.3)<170)) continue;
+    if(houses.some(h=>Math.abs(h.x-x)<110&&Math.abs(h.y-y+20)<120)) continue;
+    if(roads.some(r=>segD(x,y,r)<45)) continue;
+    if(trees.some(t=>Math.abs(t.x-x)<60&&Math.abs(t.y-y)<60)) continue;
+    trees.push({x,y,s:.8+R()*.5});
+  }
+  for(let k=0;k<W*H/9000;k++) decor.push({x:R()*W,y:R()*H,t:R()<.7?0:1,c:['#f6d55c','#ffffff','#f28aa6'][k%3]});
+  npcs=[
+    {id:'boss',x:hub.x-90,y:hub.y+40,name:'พัฒนาการอำเภอ',hat:'#b09a62',shirt:'#c9b37e',officer:true},
+    {id:'board',x:hub.x+95,y:hub.y+20,name:'กระดานเควส'},
+    ...clusters.map(c=>({id:'sign',x:c.x,y:c.y,name:'ต.'+c.name,cl:c}))
+  ];
+  player.x=hub.x;player.y=hub.y+150;
+  buildGrid(); walk=null;
+  camC.x=player.x;camC.y=player.y;setCamMode('follow');
+}
+
+// ===================== อินพุต =====================
+const keys={};
+addEventListener('keydown',e=>{
+  if(!$('#modal').hidden||!state.running){ if(e.key==='Escape') closeModal(); return; }
+  if(e.key==='-'){setZoom(Z/1.25);return} if(e.key==='='||e.key==='+'){setZoom(Z*1.25);return}
+  keys[e.key.toLowerCase()]=true;
+  if(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].includes(e.key.toLowerCase()))setCamMode('follow');
+  if(e.key===' '||e.key==='Enter'||e.key.toLowerCase()==='e'){ e.preventDefault(); doAction(); }
+});
+addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false});
+const joy={x:0,y:0,id:null};
+(function(){
+  const el=document.getElementById('joy'), kn=document.getElementById('knob');
+  function upd(e){const r=el.getBoundingClientRect();let dx=e.clientX-(r.left+r.width/2),dy=e.clientY-(r.top+r.height/2);
+    const m=Math.hypot(dx,dy),max=r.width/2-14; if(m>max){dx*=max/m;dy*=max/m}
+    joy.x=dx/max; joy.y=dy/max; kn.style.transform=`translate(${dx}px,${dy}px)`;}
+  el.addEventListener('pointerdown',e=>{joy.id=e.pointerId;el.setPointerCapture(e.pointerId);upd(e)});
+  el.addEventListener('pointermove',e=>{if(e.pointerId===joy.id)upd(e)});
+  const end=e=>{if(e.pointerId!==joy.id)return;joy.id=null;joy.x=joy.y=0;kn.style.transform=''};
+  el.addEventListener('pointerup',end); el.addEventListener('pointercancel',end);
+})();
+
+// ===================== ฟิสิกส์ =====================
+function blocked(x,y){
+  if(x<20||y<40||x>W-20||y>H-10) return true;
+  for(const h of houses) if(Math.abs(h.x-x)<50&&y>h.y-38&&y<h.y+14) return true;
+  for(const t of trees) if(Math.abs(t.x-x)<30&&Math.hypot(x-t.x,(y-t.y)*1.6)<20*t.s) return true;
+  for(const n of npcs) if(Math.hypot(x-n.x,(y-n.y)*1.6)<24) return true;
+  if(hub&&x>hub.x-130&&x<hub.x+130&&y>hub.y-150&&y<hub.y-60) return true; // อาคารสำนักงาน
+  return false;
+}
+function nearest(){
+  let best=null,bd=90;
+  for(const h of houses){if(Math.abs(h.x-player.x)>120)continue;const d=Math.hypot(player.x-h.x,player.y-(h.y+28));if(d<bd){bd=d;best={type:'house',h}}}
+  for(const n of npcs){const d=Math.hypot(player.x-n.x,player.y-n.y);if(d<bd){bd=d;best={type:n.id,n}}}
+  return best;
+}
+function warpTo(x,y){walk=null;player.x=x;player.y=y;let k=0;while(blocked(player.x,player.y)&&k++<40)player.y+=15;camC.x=player.x;camC.y=player.y;setCamMode('follow')}
+
+// ===================== วาด =====================
+const cv=document.getElementById('game'), ctx=cv.getContext('2d');
+const mini=document.getElementById('mini'), mctx=mini.getContext('2d');
+let DPR=1,VW=0,VH=0,Z=1,cam={x:0,y:0},zoom=null;
+// กล้อง: 'follow' ตามตัวละคร · 'free' เลื่อนด้วยนิ้ว (camC = จุดกลางจอในโลก)
+let camMode='follow',camC={x:0,y:0},camVel={x:0,y:0},drag=null;
+function setCamMode(m){camMode=m;camVel.x=camVel.y=0;const b=document.getElementById('btnMe');if(b)b.hidden=m!=='free'}
+function zMin(){return Math.min(VW/W,VH/H)}
+function zMax(){return VW<700?1.1:1.4}
+function setZoom(z){zoom=Math.max(zMin(),Math.min(zMax(),z));Z=zoom}
+function resize(){DPR=Math.min(devicePixelRatio||1,2);VW=innerWidth;VH=innerHeight;cv.width=VW*DPR;cv.height=VH*DPR;setZoom(zoom??DEF_ZOOM())}
+function DEF_ZOOM(){return VW<700?.4:.5}
+addEventListener('resize',resize);
+
+function label(t,x,y,size,fill,stroke,w){
+  ctx.font=`${w||500} ${size}px Mitr, Tahoma, sans-serif`;ctx.textAlign='center';ctx.lineJoin='round';
+  ctx.lineWidth=4;ctx.strokeStyle=stroke||'rgba(255,255,255,.95)';ctx.strokeText(t,x,y);ctx.fillStyle=fill||'#24321f';ctx.fillText(t,x,y);
+}
+function shadow(x,y,w){ctx.fillStyle='rgba(0,0,0,.16)';ctx.beginPath();ctx.ellipse(x,y,w,w*.38,0,0,7);ctx.fill()}
+function person(x,y,o,t){
+  const bob=o.walking?Math.abs(Math.sin(t*12))*3:0;
+  shadow(x,y,17);
+  ctx.save();ctx.translate(x,y-bob);
+  const ex=o.dir*3;
+  ctx.fillStyle=o.officer?'#2f3a4a':'#3b3b3b';ctx.fillRect(-9,-12,7,12);ctx.fillRect(2,-12,7,12);
+  ctx.fillStyle=o.shirt;ctx.beginPath();ctx.roundRect(-14,-38,28,28,8);ctx.fill();
+  if(o.officer){ // เครื่องแบบพัฒนากร: อินทรธนู กระเป๋าเสื้อ ป้ายชื่อ เข็มขัด แฟ้มเอกสาร
+    ctx.fillStyle='#6b5a33';ctx.fillRect(-14,-38,8,4);ctx.fillRect(6,-38,8,4);
+    ctx.strokeStyle='#8f7a48';ctx.lineWidth=1.5;ctx.strokeRect(-10,-30,7,6);ctx.strokeRect(3,-30,7,6);
+    ctx.fillStyle='#fff';ctx.fillRect(3,-33,8,2.5);
+    ctx.fillStyle='#3a2a20';ctx.fillRect(-14,-14,28,3);ctx.fillStyle='#e0c060';ctx.fillRect(-2,-14,4,3);
+    ctx.save();ctx.translate(o.dir*17,-24);ctx.rotate(o.dir*.15);
+    ctx.fillStyle='#8a5a32';ctx.fillRect(-6,-9,12,16);ctx.fillStyle='#fffdf5';ctx.fillRect(-4.5,-6,9,12);
+    ctx.fillStyle='#9aa0a6';ctx.fillRect(-3,-10,6,3);ctx.restore();
+  }
+  ctx.fillStyle='#f3c9a0';ctx.beginPath();ctx.arc(0,-52,17,0,7);ctx.fill();
+  ctx.fillStyle='#3a2a20';ctx.beginPath();ctx.arc(0,-56,17,Math.PI*1.05,Math.PI*1.95);ctx.fill();
+  ctx.fillStyle='#24321f';ctx.fillRect(-7+ex,-52,3.5,5);ctx.fillRect(4+ex,-52,3.5,5);
+  if(o.officer){
+    ctx.fillStyle=o.hat;ctx.beginPath();ctx.arc(0,-63,17,Math.PI,0);ctx.fill();
+    ctx.fillStyle='#4f4326';ctx.beginPath();ctx.ellipse(o.dir*12,-63,13,4,0,0,7);ctx.fill();
+    ctx.fillStyle='#e0c060';ctx.beginPath();ctx.arc(o.dir*3,-71,3.5,0,7);ctx.fill();
+  } else {
+    ctx.fillStyle=o.hat;ctx.beginPath();ctx.ellipse(0,-66,24,7,0,0,7);ctx.fill();ctx.beginPath();ctx.roundRect(-13,-80,26,15,6);ctx.fill();
+  }
+  ctx.restore();
+}
+const trunc=(s,n)=>s.length>n?s.slice(0,n-1)+'…':s;
+function drawHouse(h,t){
+  const {x,y,c}=h;
+  const dim=state.mapFilter&&!matchF(c,state.mapFilter); if(dim) ctx.globalAlpha=.18;
+  shadow(x,y+16,56);
+  ctx.save();ctx.translate(x,y);ctx.scale(.85,.85);
+  ctx.fillStyle='#f4e6c8';ctx.strokeStyle='#5b4630';ctx.lineWidth=3;
+  ctx.beginPath();ctx.roundRect(-55,-45,110,62,6);ctx.fill();ctx.stroke();
+  ctx.fillStyle=h.roof;ctx.beginPath();ctx.moveTo(-70,-40);ctx.lineTo(0,-98);ctx.lineTo(70,-40);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.fillStyle='#8a5a32';ctx.beginPath();ctx.roundRect(-12,-18,24,35,[10,10,0,0]);ctx.fill();
+  ctx.fillStyle='#9fd3e8';ctx.fillRect(-44,-30,20,16);ctx.fillRect(24,-30,20,16);
+  ctx.restore();
+  label(trunc(c.project,14),x,y+36,13.5);
+  label('ม.'+(c.moo||'-')+(c.vil?' '+trunc(c.vil,10):''),x,y+52,11.5,'#6c7562');
+  const paid=c.st.key==='paid', vis=!paid&&visitedThisMonth(c);
+  const mk=Math.min(2.6,Math.max(1,.45/Z)); // ซูมออกมาก ๆ ป้ายปีและเครื่องหมายสถานะยังเห็นชัด
+  // ป้ายปีที่กู้ (สีตามปีงบ)
+  ctx.save();ctx.translate(x,y-30);ctx.scale(mk,mk);
+  ctx.fillStyle=yearColor[c.year]||'#5b4630';ctx.strokeStyle='#fff';ctx.lineWidth=2;
+  ctx.beginPath();ctx.roundRect(-23,-10,46,20,6);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#fff';ctx.font='600 13px Mitr, sans-serif';ctx.textAlign='center';ctx.fillText('ปี'+yy(c.year),0,5);
+  ctx.restore();
+  const by=y-100+(paid||vis?0:Math.sin(t*4+x)*4);
+  ctx.fillStyle=paid?'#3d9a5b':vis?'#ffffff':c.st.color;ctx.strokeStyle=vis?'#3d9a5b':'#24321f';ctx.lineWidth=2.5;
+  ctx.save();ctx.translate(x,by);ctx.scale(mk,mk);
+  ctx.beginPath();ctx.arc(0,0,13,0,7);ctx.fill();ctx.stroke();
+  ctx.fillStyle=vis?'#3d9a5b':'#fff';ctx.font='600 16px Mitr, sans-serif';ctx.textAlign='center';ctx.fillText(paid?'★':vis?'✓':'!',0,6);
+  ctx.restore();
+  if(state.tracked===c.key){ctx.strokeStyle='#4fa3e0';ctx.lineWidth=4;ctx.setLineDash([8,6]);ctx.beginPath();ctx.ellipse(x,y+20,72,24,0,0,7);ctx.stroke();ctx.setLineDash([])}
+  ctx.globalAlpha=1;
+}
+function drawTree(tr){
+  const {x,y,s}=tr; shadow(x,y,26*s);
+  ctx.fillStyle='#7a5434';ctx.fillRect(x-6*s,y-22*s,12*s,22*s);
+  ctx.fillStyle='#3e8a3f';ctx.beginPath();ctx.arc(x,y-46*s,30*s,0,7);ctx.fill();
+  ctx.fillStyle='#4fa24d';ctx.beginPath();ctx.arc(x-9*s,y-55*s,19*s,0,7);ctx.fill();
+}
+function drawBoard(n){
+  shadow(n.x,n.y,30);
+  ctx.fillStyle='#6b4426';ctx.fillRect(n.x-26,n.y-40,6,40);ctx.fillRect(n.x+20,n.y-40,6,40);
+  ctx.fillStyle='#a8743f';ctx.strokeStyle='#4a2f19';ctx.lineWidth=3;ctx.beginPath();ctx.roundRect(n.x-36,n.y-78,72,44,6);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#fffdf5';for(let i=0;i<3;i++)ctx.fillRect(n.x-28+i*20,n.y-72+(i%2)*6,15,20);
+  label(n.name,n.x,n.y-88,14,'#8a5a32');
+}
+function drawSign(n){
+  shadow(n.x,n.y,22);
+  ctx.fillStyle='#6b4426';ctx.fillRect(n.x-4,n.y-60,8,60);
+  const w=Math.max(90,n.name.length*15);
+  ctx.fillStyle='#2f6f4f';ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.beginPath();ctx.roundRect(n.x-w/2,n.y-96,w,38,8);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#fff';ctx.font='500 18px Mitr, sans-serif';ctx.textAlign='center';ctx.fillText(n.name,n.x,n.y-70);
+  const cl=n.cl, need=cl.items.filter(needsVisit).length, done=cl.items.filter(c=>needsVisit(c)&&visitedThisMonth(c)).length;
+  label('เยี่ยมแล้ว '+done+'/'+need,n.x,n.y+22,13,'#2f6f4f');
+}
+function drawOffice(){
+  const x=hub.x,y=hub.y-60;shadow(x,y+5,150);
+  ctx.fillStyle='#f6f1e4';ctx.strokeStyle='#5b4630';ctx.lineWidth=3;ctx.beginPath();ctx.roundRect(x-130,y-90,260,95,6);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#7a4a2a';ctx.beginPath();ctx.moveTo(x-150,y-85);ctx.lineTo(x,y-150);ctx.lineTo(x+150,y-85);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.fillStyle='#9fd3e8';for(let i=-2;i<=2;i++)if(i)ctx.fillRect(x+i*48-14,y-70,28,22);
+  ctx.fillStyle='#8a5a32';ctx.fillRect(x-16,y-45,32,50);
+  ctx.fillStyle='#e9d9a6';ctx.strokeStyle='#5b4630';ctx.beginPath();ctx.roundRect(x-105,y-122,210,26,6);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#5b4630';ctx.font='500 14px Mitr, sans-serif';ctx.textAlign='center';ctx.fillText('สำนักงานพัฒนาชุมชนอำเภอ',x,y-104);
+}
+function render(t){
+  const cw=VW/Z, ch=VH/Z;
+  camC.x=cw>=W?W/2:Math.max(cw/2,Math.min(W-cw/2,camC.x)); camC.y=ch>=H?H/2:Math.max(ch/2,Math.min(H-ch/2,camC.y));
+  cam.x=camC.x-cw/2; cam.y=camC.y-ch/2;
+  const vis=(x,y,m=200)=>x>cam.x-m&&x<cam.x+cw+m&&y>cam.y-m&&y<cam.y+ch+m;
+  ctx.setTransform(DPR,0,0,DPR,0,0);ctx.fillStyle='#5aa152';ctx.fillRect(0,0,VW,VH);
+  ctx.setTransform(DPR*Z,0,0,DPR*Z,-cam.x*DPR*Z,-cam.y*DPR*Z);
+  ctx.fillStyle='#7cc06a';ctx.fillRect(0,0,W,H);
+  if(Z>.35) for(const d of decor){ if(!vis(d.x,d.y,20))continue; if(d.t===0){ctx.fillStyle='#6db15c';ctx.fillRect(d.x,d.y,3,8);ctx.fillRect(d.x+5,d.y+2,3,6)} else {ctx.fillStyle=d.c;ctx.beginPath();ctx.arc(d.x,d.y,3.5,0,7);ctx.fill()} }
+  // ถนนจากอำเภอไปแต่ละตำบล
+  ctx.lineCap='round';
+  ctx.strokeStyle='#cdb57a';ctx.lineWidth=46;for(const r of roads){ctx.beginPath();ctx.moveTo(r[0],r[1]);ctx.lineTo(r[2],r[3]);ctx.stroke()}
+  ctx.strokeStyle='#ddc995';ctx.lineWidth=36;for(const r of roads){ctx.beginPath();ctx.moveTo(r[0],r[1]);ctx.lineTo(r[2],r[3]);ctx.stroke()}
+  // ทางเดินในตำบล
+  ctx.strokeStyle='#d9c48f';ctx.lineWidth=18;
+  for(const h of houses){if(!vis(h.x,h.y,400))continue;ctx.beginPath();ctx.moveTo(h.cl.x,h.cl.y);ctx.quadraticCurveTo((h.cl.x+h.x)/2,h.cl.y+(h.y-h.cl.y)*.2,h.x,h.y+26);ctx.stroke()}
+  // ลาน
+  ctx.fillStyle='#e8dcb8';ctx.strokeStyle='#cbb98a';ctx.lineWidth=6;
+  ctx.beginPath();ctx.ellipse(hub.x,hub.y,300,220,0,0,7);ctx.fill();ctx.stroke();
+  for(const c of clusters){ctx.beginPath();ctx.ellipse(c.x,c.y+10,150,95,0,0,7);ctx.fill();ctx.stroke()}
+  const items=[{y:hub.y-60,f:drawOffice}];
+  for(const h of houses) if(vis(h.x,h.y)) items.push({y:h.y+16,f:()=>drawHouse(h,t)});
+  for(const tr of trees) if(vis(tr.x,tr.y,80)) items.push({y:tr.y,f:()=>drawTree(tr)});
+  for(const n of npcs) if(vis(n.x,n.y)) items.push({y:n.y,f:()=>{ if(n.id==='board')drawBoard(n); else if(n.id==='sign')drawSign(n); else {person(n.x,n.y,{...n,dir:1},t);label(n.name,n.x,n.y-92,14,'#6b5a33')} }});
+  items.push({y:player.y,f:()=>{person(player.x,player.y,{officer:true,shirt:'#c9b37e',hat:'#b09a62',dir:player.dir,walking:player.walking},t);label('Lv'+lvl(myExp()).lv+' พัฒนากร'+state.player,player.x,player.y-92,14)}});
+  items.sort((a,b)=>a.y-b.y).forEach(i=>i.f());
+  // ป้ายตำบลตัวใหญ่ตอนซูมออก
+  if(Z<.5) for(const c of clusters) label('ต.'+c.name,c.x,c.y-110,Math.min(110,15/Z),'#2f6f4f','#fff',600);
+  // เส้นทางและจุดหมายที่แตะ
+  if(walk){
+    ctx.strokeStyle='rgba(255,255,255,.85)';ctx.lineWidth=5;ctx.setLineDash([2,12]);ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(player.x,player.y);walk.pts.forEach(p=>ctx.lineTo(p.x,p.y));ctx.stroke();ctx.setLineDash([]);
+    const g=walk.goal, r=14+Math.sin(t*6)*3;
+    ctx.strokeStyle='#e2586a';ctx.lineWidth=4;ctx.beginPath();ctx.ellipse(g.x,g.y,r*1.6,r*.7,0,0,7);ctx.stroke();
+  }
+  // ลูกศรนำทาง
+  const tq=houses.find(h=>h.c.key===state.tracked);
+  if(tq){const a=Math.atan2(tq.y-player.y,tq.x-player.x),d=Math.hypot(tq.y-player.y,tq.x-player.x);
+    if(d>140){ctx.save();ctx.translate(player.x+Math.cos(a)*60,player.y-30+Math.sin(a)*60);ctx.rotate(a);ctx.fillStyle='#4fa3e0';ctx.strokeStyle='#fff';ctx.lineWidth=3;
+      ctx.beginPath();ctx.moveTo(18,0);ctx.lineTo(-10,-12);ctx.lineTo(-4,0);ctx.lineTo(-10,12);ctx.closePath();ctx.stroke();ctx.fill();ctx.restore()}}
+  floats=floats.filter(f=>f.life>0);
+  for(const f of floats){ctx.globalAlpha=Math.min(1,f.life);label(f.text,f.x,f.y,22,f.color,'#fff');ctx.globalAlpha=1}
+  drawMini();
+}
+function drawMini(){
+  const s=208; mctx.clearRect(0,0,s,s);mctx.save();mctx.beginPath();mctx.arc(s/2,s/2,s/2,0,7);mctx.clip();
+  mctx.fillStyle='#9fd38c';mctx.fillRect(0,0,s,s);
+  const k=Math.min(s/W,s/H)*.92, ox=(s-W*k)/2, oy=(s-H*k)/2;
+  mctx.strokeStyle='#ddc995';mctx.lineWidth=3;for(const r of roads){mctx.beginPath();mctx.moveTo(r[0]*k+ox,r[1]*k+oy);mctx.lineTo(r[2]*k+ox,r[3]*k+oy);mctx.stroke()}
+  for(const h of houses){const c=h.c;mctx.fillStyle=state.mapFilter&&!matchF(c,state.mapFilter)?'#b9d9ad':state.tracked===c.key?'#ffffff':c.st.key==='paid'||visitedThisMonth(c)?'#3d9a5b':c.st.color;mctx.fillRect(h.x*k+ox-2.5,h.y*k+oy-2.5,5,5)}
+  mctx.fillStyle='#e2586a';mctx.strokeStyle='#fff';mctx.lineWidth=2.5;mctx.beginPath();mctx.arc(player.x*k+ox,player.y*k+oy,6,0,7);mctx.fill();mctx.stroke();
+  mctx.restore();
+}
+
+
+// ===================== เดินไปจุดที่แตะ (หาเส้นทางเลี่ยงบ้าน/ต้นไม้) =====================
+const CELL=30; let grid=null,GW=0,GH=0,walk=null;
+function buildGrid(){
+  GW=Math.ceil(W/CELL);GH=Math.ceil(H/CELL);grid=new Uint8Array(GW*GH);
+  const M=14; // ระยะเผื่อตัวละคร
+  const mark=(x0,y0,x1,y1)=>{for(let gy=Math.max(0,Math.floor((y0-M)/CELL));gy<=Math.min(GH-1,Math.floor((y1+M)/CELL));gy++)
+    for(let gx=Math.max(0,Math.floor((x0-M)/CELL));gx<=Math.min(GW-1,Math.floor((x1+M)/CELL));gx++)grid[gy*GW+gx]=1};
+  houses.forEach(h=>mark(h.x-50,h.y-38,h.x+50,h.y+14));
+  trees.forEach(t=>mark(t.x-16*t.s,t.y-10*t.s,t.x+16*t.s,t.y+10*t.s));
+  npcs.forEach(n=>mark(n.x-22,n.y-14,n.x+22,n.y+14));
+  mark(hub.x-130,hub.y-150,hub.x+130,hub.y-60);
+  for(let gx=0;gx<GW;gx++){grid[gx]=1;grid[(GH-1)*GW+gx]=1} for(let gy=0;gy<GH;gy++){grid[gy*GW]=1;grid[gy*GW+GW-1]=1}
+}
+const gFree=(x,y)=>x>=0&&y>=0&&x<GW&&y<GH&&!grid[y*GW+x];
+function nearFree(cx,cy){
+  if(gFree(cx,cy))return [cx,cy];
+  for(let r=1;r<10;r++){let best=null;for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++){if(Math.max(Math.abs(dx),Math.abs(dy))!==r)continue;
+    if(gFree(cx+dx,cy+dy)){const d=dx*dx+dy*dy;if(!best||d<best[2])best=[cx+dx,cy+dy,d]}} if(best)return [best[0],best[1]]}
+  return null;
+}
+function losFree(a,b){const d=Math.hypot(b.x-a.x,b.y-a.y),n=Math.ceil(d/(CELL/3));
+  for(let i=1;i<n;i++){const x=a.x+(b.x-a.x)*i/n,y=a.y+(b.y-a.y)*i/n;if(!gFree(Math.floor(x/CELL),Math.floor(y/CELL)))return false}return true}
+function findPath(sx,sy,tx,ty){
+  const cl=(v,m)=>Math.max(0,Math.min(m-1,Math.floor(v/CELL)));
+  const a=nearFree(cl(sx,GW),cl(sy,GH)), b0=nearFree(cl(tx,GW),cl(ty,GH)); if(!a||!b0) return null;
+  const goalExact=gFree(cl(tx,GW),cl(ty,GH));
+  const S=a[1]*GW+a[0], G=b0[1]*GW+b0[0], N=GW*GH;
+  const g=new Float32Array(N).fill(1e9), came=new Int32Array(N).fill(-1), done=new Uint8Array(N);
+  const hx=i=>{const dx=Math.abs(i%GW-b0[0]),dy=Math.abs(((i/GW)|0)-b0[1]);return (dx+dy)+(1.4142-2)*Math.min(dx,dy)};
+  const heap=[];const push=(f,i)=>{heap.push([f,i]);let k=heap.length-1;while(k>0){const p=(k-1)>>1;if(heap[p][0]<=heap[k][0])break;[heap[p],heap[k]]=[heap[k],heap[p]];k=p}};
+  const pop=()=>{const top=heap[0],last=heap.pop();if(heap.length){heap[0]=last;let k=0;for(;;){const l=2*k+1,r=l+1;let m=k;if(l<heap.length&&heap[l][0]<heap[m][0])m=l;if(r<heap.length&&heap[r][0]<heap[m][0])m=r;if(m===k)break;[heap[m],heap[k]]=[heap[k],heap[m]];k=m}}return top};
+  g[S]=0;push(hx(S),S);let it=0;
+  while(heap.length&&it++<60000){
+    const [,i]=pop(); if(done[i])continue; done[i]=1; if(i===G)break;
+    const x=i%GW,y=(i/GW)|0;
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){ if(!dx&&!dy)continue;
+      const nx=x+dx,ny=y+dy; if(!gFree(nx,ny))continue;
+      if(dx&&dy&&(!gFree(x+dx,y)||!gFree(x,y+dy)))continue;
+      const j=ny*GW+nx, ng=g[i]+(dx&&dy?1.4142:1);
+      if(ng<g[j]){g[j]=ng;came[j]=i;push(ng+hx(j),j)}
+    }
+  }
+  if(!done[G]) return null;
+  const cells=[];for(let i=G;i!==-1;i=came[i])cells.push(i);cells.reverse();
+  const pts=[{x:sx,y:sy},...cells.slice(1).map(i=>({x:(i%GW)*CELL+CELL/2,y:((i/GW)|0)*CELL+CELL/2}))];
+  if(goalExact) pts.push({x:tx,y:ty});
+  const out=[];let k=0;
+  while(k<pts.length-1){let j=pts.length-1;while(j>k+1&&!losFree(pts[k],pts[j]))j--;out.push(pts[j]);k=j}
+  return out;
+}
+function walkTo(tx,ty,act){
+  if(Math.hypot(tx-player.x,ty-player.y)<28){walk=null;if(act)act();return}
+  const pts=findPath(player.x,player.y,tx,ty);
+  if(!pts||!pts.length){toast('เดินไปตรงนั้นไม่ได้ ลองแตะใกล้ทางเดิน');return}
+  let len=0,px=player.x,py=player.y;pts.forEach(p=>{len+=Math.hypot(p.x-px,p.y-py);px=p.x;py=p.y});
+  walk={pts,act,len,goal:pts[pts.length-1]};
+  setCamMode('follow');
+}
+// ===================== ลูป =====================
+let last=0;
+function loop(ts){
+  const t=ts/1000, dt=Math.min(.05,(ts-last)/1000||0); last=ts;
+  if(state.running && $('#modal').hidden){
+    let mx=(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0)+joy.x;
+    let my=(keys.s||keys.arrowdown?1:0)-(keys.w||keys.arrowup?1:0)+joy.y;
+    const m=Math.hypot(mx,my); if(m>1){mx/=m;my/=m}
+    const sp=300*dt; player.walking=m>.1;
+    if(player.walking){ walk=null; if(Math.abs(mx)>.1) player.dir=mx>0?1:-1;
+      const nx=player.x+mx*sp, ny=player.y+my*sp;
+      if(!blocked(nx,player.y)) player.x=nx; if(!blocked(player.x,ny)) player.y=ny; }
+    else if(walk){ // เดินตามเส้นทางไปจุดที่แตะ (ทางไกลจะเดินเร็วขึ้น)
+      let step=Math.min(950,340+walk.len*.18)*dt;
+      while(walk&&step>0){
+        const wp=walk.pts[0], dx=wp.x-player.x, dy=wp.y-player.y, d=Math.hypot(dx,dy);
+        if(Math.abs(dx)>1) player.dir=dx>0?1:-1;
+        if(d<=step){player.x=wp.x;player.y=wp.y;step-=d;walk.pts.shift();
+          if(!walk.pts.length){const a=walk.act;walk=null;if(a)a();}}
+        else{player.x+=dx/d*step;player.y+=dy/d*step;step=0}
+      }
+      player.walking=!!walk;
+    }
+    const n=nearest(), btn=$('#act');
+    const txt=!n?'สำรวจ':n.type==='house'?(n.h.c.st.key==='paid'?'ดูกลุ่ม':'ทำเควส'):n.type==='boss'?'คุย':n.type==='sign'?'ข้อมูลตำบล':'เปิดกระดาน';
+    if(btn.textContent!==txt) btn.textContent=txt; btn.dataset.on=n?'1':'0';
+  }
+  if(camMode==='follow'){const k=Math.min(1,dt*7);camC.x+=(player.x-camC.x)*k;camC.y+=(player.y-camC.y)*k}
+  else if(!drag&&(Math.abs(camVel.x)+Math.abs(camVel.y)>8)){ // ไถลต่อหลังปัดนิ้ว
+    camC.x-=camVel.x/Z*dt;camC.y-=camVel.y/Z*dt;const f=Math.pow(.03,dt);camVel.x*=f;camVel.y*=f}
+  for(const f of floats){f.y-=40*dt;f.life-=dt*.8}
+  if(hub) render(t);
+  requestAnimationFrame(loop);
+}
+
+// ===================== UI =====================
+function $(s){return document.querySelector(s)}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function baht(n){return (+n||0).toLocaleString('th-TH',{maximumFractionDigits:0})+' ฿'}
+function chip(st){return `<span class="chip" style="background:${st.color}">${st.label}</span>`}
+const RANKS=['พัฒนากรฝึกหัด','พัฒนากรปฏิบัติการ','พัฒนากรชำนาญการ','พัฒนากรชำนาญการพิเศษ','ยอดพัฒนากรประจำอำเภอ'];
+function rank(lv){return RANKS[Math.min(RANKS.length-1,Math.floor((lv-1)/2))]}
+function lvl(exp){const lv=Math.floor(Math.sqrt(exp/40))+1,a=(lv-1)**2*40,b=lv**2*40;return{lv,cur:exp-a,need:b-a}}
+let toastT; function toast(m){const el=$('#toast');el.textContent=m;el.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),2800)}
+function updateHud(){
+  const L=lvl(myExp());
+  $('#meName').textContent=state.player; $('#ava').textContent=state.player.trim().charAt(0)||'?';
+  $('#meLv').textContent=rank(L.lv)+' · Lv'+L.lv;
+  $('#expBar').style.width=(L.cur/L.need*100)+'%'; $('#expTxt').textContent=L.cur+' / '+L.need;
+  const need=state.contracts.filter(needsVisit), done=need.filter(visitedThisMonth).length;
+  $('#teamBar').style.width=(need.length?done/need.length*100:0)+'%';
+  $('#teamTxt').textContent=done+' / '+need.length;
+}
+function openModal(html){$('#modalBody').innerHTML=html;$('#modal').hidden=false;keys.w=keys.a=keys.s=keys.d=false;
+  $('#modalBody').querySelectorAll('[data-close]').forEach(b=>b.onclick=closeModal);
+  const f=$('#modalBody').querySelector('button,input,select');f&&f.focus({preventScroll:true});$('#modalBody').scrollTop=0}
+function closeModal(){$('#modal').hidden=true}
+$('#modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal()});
+function bindNav(root){
+  root.querySelectorAll('[data-track]').forEach(g=>g.onclick=()=>{state.tracked=g.dataset.track;closeModal();toast('ตามลูกศรสีฟ้าไปได้เลย')});
+  root.querySelectorAll('[data-warp]').forEach(g=>g.onclick=()=>{const c=clusters.find(c=>c.name===g.dataset.warp);warpTo(c.x,c.y+55);closeModal();toast('ขี่มอเตอร์ไซค์มาถึง ต.'+c.name+' แล้ว')});
+  root.querySelectorAll('[data-open]').forEach(g=>g.onclick=()=>{const h=houses.find(h=>h.c.key===g.dataset.open);questDialog(h.c)});
+}
+
+function doAction(){
+  if(!$('#modal').hidden) return;
+  const n=nearest();
+  if(!n){toast('เดินไปใกล้บ้านที่มีเครื่องหมาย ! หรือป้ายตำบล');return}
+  if(n.type==='house') questDialog(n.h.c);
+  else if(n.type==='boss') bossDialog();
+  else if(n.type==='sign') tambonDialog(n.n.cl);
+  else boardDialog();
+}
+$('#act').addEventListener('click',doAction);
+$('#btnList').addEventListener('click',()=>boardDialog());
+$('#btnSum').addEventListener('click',summaryDialog);
+$('#btnBook').addEventListener('click',()=>journalDialog());
+$('#btnMe').addEventListener('click',()=>setCamMode('follow'));
+$('#fchipX').addEventListener('click',()=>{state.mapFilter=null;updateFilterChip();toast('แสดงทุกบ้านแล้ว')});
+$('#fchipTxt').addEventListener('click',()=>boardDialog());
+addEventListener('online',()=>syncPending());
+$('#zOut').addEventListener('click',()=>setZoom(Z/1.25));
+$('#zIn').addEventListener('click',()=>setZoom(Z*1.25));
+$('#zAll').addEventListener('click',()=>{setZoom(Z<=zMin()+.001?DEF_ZOOM():zMin())});
+// นิ้วเดียวลาก = เลื่อนแผนที่ (ปัดแรงจะไถลต่อ) · แตะ = เดินไปจุดนั้น · สองนิ้วถ่าง/หุบ = ซูม
+const ptrs=new Map();let pinch=null,tapStart=null;
+cv.addEventListener('pointerdown',e=>{
+  try{cv.setPointerCapture(e.pointerId)}catch(_){}
+  ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY}); camVel.x=camVel.y=0;
+  if(ptrs.size===2){const [a,b]=[...ptrs.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y)||1,z:Z};tapStart=null;drag=null}
+  else if(ptrs.size===1){tapStart={x:e.clientX,y:e.clientY,t:performance.now()};drag={sx:e.clientX,sy:e.clientY,x:e.clientX,y:e.clientY,lt:performance.now(),moved:false}}
+});
+cv.addEventListener('pointermove',e=>{
+  if(!ptrs.has(e.pointerId))return; ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pinch&&ptrs.size>=2){const [a,b]=[...ptrs.values()];setZoom(pinch.z*Math.hypot(a.x-b.x,a.y-b.y)/pinch.d);return}
+  if(!drag||!state.running) return;
+  if(!drag.moved&&Math.hypot(e.clientX-drag.sx,e.clientY-drag.sy)>10){drag.moved=true;tapStart=null;if(camMode!=='free')setCamMode('free')}
+  if(drag.moved){
+    const dx=e.clientX-drag.x,dy=e.clientY-drag.y,now=performance.now(),dtm=Math.max(8,now-drag.lt);
+    camC.x-=dx/Z;camC.y-=dy/Z;camVel.x=dx/dtm*1000;camVel.y=dy/dtm*1000;drag.lt=now;
+  }
+  drag.x=e.clientX;drag.y=e.clientY;
+});
+const ptrUp=e=>{
+  ptrs.delete(e.pointerId); if(ptrs.size<2)pinch=null;
+  if(e.type==='pointerup'&&tapStart&&ptrs.size===0&&performance.now()-tapStart.t<450) tapAt(e.clientX,e.clientY);
+  if(ptrs.size===0){ if(drag&&drag.moved&&performance.now()-drag.lt>90){camVel.x=camVel.y=0} drag=null; tapStart=null; }
+};
+// แตะแผนที่ย่อ = เลื่อนกล้องไปตรงนั้น
+mini.addEventListener('click',e=>{
+  if(!state.running)return; const r=mini.getBoundingClientRect(), s=208, k=Math.min(s/W,s/H)*.92, ox=(s-W*k)/2, oy=(s-H*k)/2;
+  camC.x=((e.clientX-r.left)*s/r.width-ox)/k; camC.y=((e.clientY-r.top)*s/r.height-oy)/k; setCamMode('free');
+});
+cv.addEventListener('pointerup',ptrUp);cv.addEventListener('pointercancel',ptrUp);
+function tapAt(sx,sy){
+  if(!state.running||!$('#modal').hidden)return;
+  const wx=cam.x+sx/Z, wy=cam.y+sy/Z, mk=Math.min(2.6,Math.max(1,.45/Z));
+  let hit=null;
+  for(const h of houses) if(Math.abs(wx-h.x)<70*Math.max(1,mk*.8)&&wy>h.y-100-20*mk&&wy<h.y+58&&(!hit||h.y>hit.y)) hit=h;
+  if(hit){ walkTo(hit.x,hit.y+45,()=>peekDialog(hit.c)); return; }
+  let np=null;
+  for(const n of npcs) if(Math.abs(wx-n.x)<45&&wy>n.y-100&&wy<n.y+25) np=n;
+  if(np){ walkTo(np.x,np.y+50,()=>np.id==='boss'?bossDialog():np.id==='board'?boardDialog():tambonDialog(np.cl)); return; }
+  walkTo(wx,wy,null);
+}
+function peekDialog(c){
+  const v=visitedThisMonth(c);
+  openModal(`<p class="sub" style="margin-bottom:4px">ต.${esc(c.tambon)} ม.${esc(c.moo||'-')}${c.vil?' '+esc(c.vil):''}</p>
+    <h2>${esc(c.project)}</h2>
+    <div class="peek-year" style="background:${yearColor[c.year]||'#5b4630'}">กู้ปีงบ ${esc(c.year)}</div>
+    <div class="kv"><b>สถานะหนี้</b><span>${chip(c.st)}${v?' <span class="chip" style="background:#3d9a5b">เยี่ยมแล้วเดือนนี้</span>':''}</span>
+      <b>เงินกู้</b><span>${baht(c.loan)}</span><b>เลขสัญญา</b><span>${esc(c.contract)}</span></div>
+    <div class="row"><button class="btn" data-close>ปิด</button>${c.st.key==='paid'?'':`<button class="btn" data-track="${esc(c.key)}">นำทาง</button>`}<button class="btn pri" id="pkFull">ดูทั้งหมด</button></div>`);
+  bindNav($('#modalBody')); $('#pkFull').onclick=()=>questDialog(c);
+}
+cv.addEventListener('wheel',e=>{e.preventDefault();setZoom(Z*(e.deltaY>0?.9:1.1))},{passive:false});
+
+function summarize(list){
+  const s={n:list.length,loan:0,by:{},need:0,visited:0,collected:0};
+  STATUS.forEach(x=>s.by[x.key]=0);
+  list.forEach(c=>{s.loan+=c.loan;s.by[c.st.key]++;if(needsVisit(c)){s.need++;if(visitedThisMonth(c))s.visited++}});
+  const keys=new Set(list.map(c=>c.key));
+  s.collected=state.log.filter(e=>keys.has(e.key)&&e.result==='paid'&&sameMonth(e.ts)).reduce((a,e)=>a+(+e.amount||0),0);
+  return s;
+}
+function statusBar(s){
+  const order=['d2','d1','late','rs','wait','paid'];
+  return `<div class="sbar">${order.map(k=>s.by[k]?`<i style="width:${s.by[k]/s.n*100}%;background:${ST[k].color}" title="${ST[k].label} ${s.by[k]}"></i>`:'').join('')}</div>
+    <div class="legend">${order.map(k=>`<span style="--c:${ST[k].color}">${ST[k].label} ${s.by[k]}</span>`).join('')}</div>`;
+}
+const byPriority=(a,b)=>(visitedThisMonth(a)-visitedThisMonth(b))||(a.st.pr-b.st.pr)||(b.loan-a.loan);
+const dist=c=>{const h=houses.find(h=>h.c===c);return h?Math.hypot(h.x-player.x,h.y-player.y):0};
+function rowLi(c){
+  const v=visitedThisMonth(c);
+  return `<div class="li"><div class="t">${esc(trunc(c.project,26))} ${chip(c.st)}${v?' <span class="chip" style="background:#3d9a5b">เยี่ยมแล้ว</span>':''}
+    <small>ต.${esc(c.tambon)} ม.${esc(c.moo||'-')} · ปี${esc(String(c.year).slice(-2))} · ${baht(c.loan)}</small></div>
+    <button class="go alt" data-open="${esc(c.key)}">ดู</button>${c.st.key==='paid'?'':`<button class="go" data-track="${esc(c.key)}">นำทาง</button>`}</div>`;
+}
+
+function summaryDialog(){
+  const s=summarize(state.contracts);
+  const per=clusters.map(c=>({c,s:summarize(c.items)}));
+  const years=allYears();
+  openModal(`<h2>สรุปข้อมูลกลุ่มสตรี</h2><p class="sub">${esc(AREA||'ทุกพื้นที่')} · ทุกปีงบประมาณ · ${esc(scopeText())}${DEMO?' · ข้อมูลตัวอย่าง':''}</p>
+    <div class="stats">
+      <div class="stat"><b>${s.n}</b><span>สัญญา/กลุ่ม</span></div>
+      <div class="stat"><b>${baht(s.loan)}</b><span>เงินกู้รวม</span></div>
+      <div class="stat"><b>${s.by.d2+s.by.d1+s.by.late}</b><span>ค้าง/ถูกทวงถาม</span></div>
+      <div class="stat"><b>${s.visited}/${s.need}</b><span>เยี่ยมแล้วเดือนนี้</span></div>
+      <div class="stat"><b>${baht(s.collected)}</b><span>รับชำระเดือนนี้</span></div>
+    </div>
+    ${statusBar(s)}
+    <h3>แยกตามตำบล</h3>
+    <div class="tbl"><table><thead><tr><th>ตำบล</th><th>กลุ่ม</th><th>ทวง 2</th><th>ทวง 1/ค้าง</th><th>เงินกู้</th><th>เยี่ยม</th><th></th></tr></thead><tbody>
+    ${per.map(({c,s})=>`<tr><td>${esc(c.name)}</td><td>${s.n}</td><td style="color:${ST.d2.color}">${s.by.d2}</td><td>${s.by.d1+s.by.late}</td><td>${baht(s.loan)}</td><td>${s.visited}/${s.need}</td>
+      <td><button class="go" data-warp="${esc(c.name)}">ไป</button></td></tr>`).join('')}
+    </tbody></table></div>
+    <h3>แยกตามปีงบประมาณ</h3>
+    <div class="tbl"><table><thead><tr><th>ปีงบ</th><th>สัญญา</th><th>ชำระครบ</th><th>ทวง 2</th><th>ทวง 1/ค้าง</th><th>ปรับโครงสร้าง</th><th>เงินกู้</th></tr></thead><tbody>
+    ${years.map(y=>{const t=summarize(state.contracts.filter(c=>c.year===y));if(!t.n)return `<tr><td><span class="ychip" style="background:${yearColor[y]}">ปี${yy(y)}</span> ${esc(y)}</td><td colspan="6" style="text-align:left;color:var(--muted)">ยังไม่มีข้อมูล</td></tr>`;return `<tr><td><span class="ychip" style="background:${yearColor[y]}">ปี${yy(y)}</span> ${esc(y)}</td><td>${t.n}</td><td>${t.by.paid}</td><td>${t.by.d2}</td><td>${t.by.d1+t.by.late}</td><td>${t.by.rs}</td><td>${baht(t.loan)}</td></tr>`}).join('')}
+    </tbody></table></div>
+    <div class="row"><button class="btn" data-close>ปิด</button></div>`);
+  bindNav($('#modalBody'));
+}
+function tambonDialog(cl){
+  const s=summarize(cl.items);
+  const list=cl.items.slice().sort(byPriority);
+  openModal(`<h2>ตำบล${esc(cl.name)}</h2><p class="sub">${s.n} กลุ่ม · เงินกู้รวม ${baht(s.loan)} · เยี่ยมแล้วเดือนนี้ ${s.visited}/${s.need}</p>
+    ${statusBar(s)}
+    <h3>กลุ่มในตำบล (ด่วนก่อน)</h3><div class="list">${list.map(rowLi).join('')}</div>
+    <div class="row"><button class="btn" data-close>ปิด</button></div>`);
+  bindNav($('#modalBody'));
+}
+// ===================== ค้นหา (ข้อความ / ปีงบ / ตำบล / สถานะ) =====================
+function hayOf(c){return c._hay||(c._hay=(c.project+' '+c.proposer+' '+c.contract+' '+c.vil+' ม.'+c.moo+' '+c.addr+' '+c.tambon).toLowerCase())}
+function matchF(c,f){
+  if(f.tb&&c.tambon!==f.tb) return false;
+  if(f.st&&c.st.key!==f.st) return false;
+  if(f.yrs&&f.yrs.length&&!f.yrs.includes(c.year)) return false;
+  if(f.todo&&!(needsVisit(c)&&!visitedThisMonth(c))) return false;
+  if(f.q){const h=hayOf(c);if(!f.q.toLowerCase().split(/\s+/).filter(Boolean).every(w=>h.includes(w)))return false}
+  return true;
+}
+function filterText(f){
+  const p=[];
+  if(f.yrs&&f.yrs.length) p.push('ปี'+f.yrs.map(yy).join(','));
+  if(f.tb) p.push('ต.'+f.tb);
+  if(f.st) p.push(ST[f.st].label);
+  if(f.q) p.push('"'+f.q+'"');
+  if(f.todo) p.push('ยังไม่เยี่ยม');
+  return p.join(' · ');
+}
+function filterActive(f){return !!(f&&(f.q||f.tb||f.st||f.todo||(f.yrs&&f.yrs.length)))}
+function updateFilterChip(){
+  const f=state.mapFilter, el=$('#fchip');
+  if(!filterActive(f)){el.hidden=true;return}
+  const n=state.contracts.filter(c=>matchF(c,f)).length;
+  $('#fchipTxt').textContent='แผนที่: '+filterText(f)+' ('+n+' หลัง)'; el.hidden=false;
+}
+function boardDialog(f){
+  f=f||state.filter||{q:'',tb:'',st:'',yrs:[],todo:false};state.filter=f;
+  const years=Object.keys(yearColor);
+  openModal(`<h2>ค้นหากลุ่ม</h2>
+    <p class="sub" style="margin:2px 0 4px">${esc(scopeText())}</p>
+    <input id="fQ" type="search" placeholder="ชื่อโครงการ ชื่อผู้เสนอ เลขสัญญา หรือชื่อบ้าน" value="${esc(f.q)}" autocomplete="off" style="margin:6px 0 8px">
+    <div class="ylabel">ปีงบที่กู้ <small>(แตะได้หลายปี)</small></div>
+    <div class="ychips">${years.map(y=>`<button class="ybtn" data-y="${esc(y)}" aria-pressed="${f.yrs.includes(y)}" style="--yc:${yearColor[y]}">ปี${yy(y)}</button>`).join('')}</div>
+    <div class="filters">
+      <select id="fTb" aria-label="ตำบล"><option value="">ทุกตำบล</option>${clusters.map(c=>`<option ${f.tb===c.name?'selected':''} value="${esc(c.name)}">ต.${esc(c.name)} (${c.items.length})</option>`).join('')}</select>
+      <select id="fSt" aria-label="สถานะ"><option value="">ทุกสถานะ</option>${STATUS.map(s=>`<option ${f.st===s.key?'selected':''} value="${s.key}">${s.label}</option>`).join('')}</select>
+    </div>
+    <label class="chk"><input type="checkbox" id="fTodo" ${f.todo?'checked':''}> เฉพาะที่ยังไม่ได้เยี่ยมเดือนนี้</label>
+    <div id="fRes"></div>
+    <div class="row"><button class="btn" id="fClear">ล้างตัวกรอง</button><button class="btn pri" id="fMap">แสดงบนแผนที่</button></div>
+    <div class="row"><button class="btn" data-close>ปิด</button>${GAS?'<button class="btn" id="reload">ดึงข้อมูลใหม่</button>':''}</div>`);
+  const body=$('#modalBody');
+  const read=()=>{f.q=$('#fQ').value.trim();f.tb=$('#fTb').value;f.st=$('#fSt').value;f.todo=$('#fTodo').checked;f.yrs=[...body.querySelectorAll('.ybtn[aria-pressed="true"]')].map(b=>b.dataset.y);state.filter=f};
+  const render=()=>{
+    read();
+    const list=state.contracts.filter(c=>matchF(c,f)).sort((a,b)=>byPriority(a,b)||(dist(a)-dist(b)));
+    const s=summarize(list);
+    $('#fRes').innerHTML=`<p class="sub" style="margin:4px 0">พบ <b>${list.length}</b> กลุ่ม · เงินกู้รวม ${baht(s.loan)} · เยี่ยมแล้วเดือนนี้ ${s.visited}/${s.need}</p>
+      ${list.length?statusBar(s):''}
+      ${f.tb?`<div class="row" style="margin:8px 0"><button class="btn" data-warp="${esc(f.tb)}">ขี่มอไซค์ไป ต.${esc(f.tb)}</button></div>`:''}
+      <div class="list" style="margin-top:8px">${list.slice(0,80).map(rowLi).join('')||(f.yrs.length&&f.yrs.every(y=>!state.all.some(c=>c.year===y))?'<p class="sub">ปีงบนี้ยังไม่มีข้อมูลในชีต เมื่อกรอกข้อมูลในแท็บ "ปี '+f.yrs.map(yy).join('", "ปี ')+'" แล้วกด "ดึงข้อมูลใหม่" กลุ่มจะขึ้นในแผนที่</p>':'<p class="sub">ไม่พบกลุ่มตามเงื่อนไขนี้</p>')}</div>
+      ${list.length>80?'<p class="note">แสดง 80 รายการแรก เลือกปีหรือตำบลเพื่อให้แคบลง</p>':''}`;
+    bindNav($('#fRes'));
+  };
+  let t; $('#fQ').addEventListener('input',()=>{clearTimeout(t);t=setTimeout(render,200)});
+  $('#fTb').onchange=render;$('#fSt').onchange=render;$('#fTodo').onchange=render;
+  body.querySelectorAll('.ybtn').forEach(b=>b.onclick=()=>{b.setAttribute('aria-pressed',b.getAttribute('aria-pressed')!=='true');render()});
+  $('#fClear').onclick=()=>{state.filter={q:'',tb:'',st:'',yrs:[],todo:false};state.mapFilter=null;updateFilterChip();boardDialog()};
+  $('#fMap').onclick=()=>{read();state.mapFilter=filterActive(f)?JSON.parse(JSON.stringify(f)):null;updateFilterChip();closeModal();
+    if(state.mapFilter){setZoom(zMin());toast('บ้านที่ตรงเงื่อนไขจะเด่น ที่เหลือจะจางลง')}};
+  const rl=$('#reload'); if(rl) rl.onclick=async()=>{rl.disabled=true;try{await loadData(true);closeModal();toast('อัปเดตข้อมูลจากชีตแล้ว')}catch(e){toast(e.message||String(e))}};
+  render();
+  if(!f.q) $('#fQ').blur();
+}
+function bossDialog(){
+  const s=summarize(state.contracts);
+  const today=state.contracts.filter(c=>needsVisit(c)&&!visitedThisMonth(c)).sort((a,b)=>byPriority(a,b)||(dist(a)-dist(b))).slice(0,5);
+  const players={};state.log.forEach(e=>players[e.player]=(players[e.player]||0)+(+e.exp||0));
+  const ps=Object.entries(players).sort((a,b)=>b[1]-a[1]);
+  openModal(`<h2>พัฒนาการอำเภอ</h2><p class="sub">“เดือนนี้เยี่ยมไปแล้ว ${s.visited} จาก ${s.need} กลุ่ม รับชำระ ${baht(s.collected)} ช่วยไปดูกลุ่มที่ถูกทวงถามครั้งที่ 2 ก่อนนะ บางกลุ่มลำบากจริงก็เสนอปรับโครงสร้างหนี้ได้”</p>
+    <h3>เควสแนะนำวันนี้</h3><div class="list">${today.map(rowLi).join('')||'<p class="sub">เยี่ยมครบทุกกลุ่มแล้ว เก่งมาก!</p>'}</div>
+    ${ps.length?`<h3>อันดับพัฒนากร (EXP)</h3><div class="list">${ps.map(([n,e],i)=>`<div class="li"><div class="t">${i+1}. ${esc(n)}<small>${rank(lvl(e).lv)} · Lv${lvl(e).lv}</small></div><b>${e}</b></div>`).join('')}</div>`:''}
+    <div class="row"><button class="btn" data-close>ปิด</button></div>`);
+  bindNav($('#modalBody'));
+}
+function questDialog(c){
+  const paid=c.st.key==='paid';
+  const hist=state.log.filter(e=>e.key===c.key).slice(-5).reverse();
+  openModal(`
+    <h2>${esc(c.project)}</h2><p class="sub">ต.${esc(c.tambon)} ม.${esc(c.moo||'-')}${c.vil?' '+esc(c.vil):''} · ${esc(c.sheet)}</p>
+    <div class="kv">
+      <b>ผู้เสนอ</b><span>${esc(c.proposer||'-')}</span>
+      <b>ที่อยู่</b><span>${esc(c.addr||'-')}</span>
+      <b>ปีงบที่กู้</b><span><span class="ychip" style="background:${yearColor[c.year]||'#5b4630'}">ปี${yy(c.year)}</span> ${esc(c.year)}</span>
+      <b>เลขที่สัญญา</b><span>${esc(c.contract)}</span>
+      <b>เงินกู้</b><span>${baht(c.loan)}</span>
+      <b>สถานะหนี้</b><span>${chip(c.st)} ${c.pay&&c.pay!==c.st.label?esc(c.pay):''}</span>
+      <b>โครงการ</b><span>${/คดี/.test(c.proj)?`<span class="chip" style="background:#5b4630">${esc(c.proj)}</span>`:esc(c.proj||'-')}</span>
+    </div>
+    ${hist.length?`<div class="hist">${hist.map(e=>`<div><b>${new Date(e.ts).toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'})}</b> ${esc(RESULTS[e.result]?RESULTS[e.result].label:e.result)}${+e.amount?' '+baht(e.amount):''}${e.appt?' นัด '+esc(e.appt):''} · ${esc(e.player)}${e.note?'<br>'+esc(e.note):''}</div>`).join('')}</div>`:''}
+    ${paid?`<p class="sub">กลุ่มนี้ชำระครบตามสัญญาแล้ว</p><div class="row"><button class="btn" data-close>ปิด</button></div>`:`
+    <div class="opts" role="group" aria-label="ผลการลงพื้นที่">
+      ${Object.entries(RESULTS).map(([k,r])=>`<button class="opt" data-r="${k}" aria-pressed="false">${r.label}<small>${r.hint} · +${r.exp} EXP</small></button>`).join('')}
+    </div>
+    <div id="amtWrap" hidden><label class="f" for="amt">จำนวนเงินที่ได้รับ (บาท)</label><input id="amt" type="number" inputmode="numeric" min="0" step="1"></div>
+    <div id="apWrap" hidden><label class="f" for="ap">วันนัดชำระ</label><input id="ap" type="date"></div>
+    <label class="f" for="qnote">บันทึก</label><textarea id="qnote" maxlength="300" placeholder="เช่น กิจการยังดำเนินอยู่ ขอผ่อนเดือนละ 2,000"></textarea>
+    <div class="err" id="qerr"></div>
+    <div class="row"><button class="btn" data-close>ยกเลิก</button><button class="btn pri" id="qsend" disabled>บันทึกผล</button></div>
+    <p class="note">เกมไม่แก้สถานะในชีตปีงบเดิม ผลจะบันทึกในชีต "บันทึกติดตาม" · คุยอย่างสุภาพ เก็บเรื่องหนี้เป็นความลับ ติดต่อได้ 08:00–20:00 น. (วันหยุด 08:00–18:00 น.)</p>`}`);
+  const body=$('#modalBody'); let pick=null;
+  body.querySelectorAll('.opt').forEach(b=>b.onclick=()=>{
+    pick=b.dataset.r; body.querySelectorAll('.opt').forEach(o=>o.setAttribute('aria-pressed',o===b));
+    $('#amtWrap').hidden=pick!=='paid'; $('#apWrap').hidden=pick!=='appt'; $('#qsend').disabled=false;
+  });
+  const send=$('#qsend'); if(!send) return;
+  send.onclick=async()=>{
+    const amount=pick==='paid'?Math.round(+$('#amt').value||0):0, appt=pick==='appt'?$('#ap').value:'';
+    if(pick==='paid'&&amount<=0){$('#qerr').textContent='ใส่จำนวนเงินที่ได้รับ';return}
+    if(pick==='appt'&&!appt){$('#qerr').textContent='เลือกวันนัดชำระ';return}
+    const note=$('#qnote').value.trim();
+    send.disabled=true; send.textContent='กำลังบันทึก…'; $('#qerr').textContent='';
+    const before=lvl(myExp()).lv;
+    const payload={player:state.player,key:c.key,sheet:c.sheet,contract:c.contract,project:c.project,tambon:c.tambon,result:pick,amount,appt,note};
+    const jr={id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),ts:new Date().toISOString(),...payload,moo:c.moo,exp:RESULTS[pick].exp,status:'sent'};
+    try{
+      let entry, offline=false;
+      try{ entry=await api.submit(payload); jr.ts=entry.ts||jr.ts; }
+      catch(err){ if(err&&err.fatal) throw err; offline=true; jr.status='pending';
+        entry={ts:jr.ts,player:jr.player,key:jr.key,result:jr.result,amount:jr.amount,appt:jr.appt,note:jr.note,exp:jr.exp,pending:jr.id}; }
+      journal.add(jr);
+      state.log.push(entry);
+      if(state.tracked===c.key&&RESULTS[pick].visit) state.tracked=null;
+      const h=houses.find(h=>h.c===c);
+      floats.push({text:'+'+RESULTS[pick].exp+' EXP',x:h.x,y:h.y-125,life:1.6,color:'#4fa3e0'});
+      if(amount) floats.push({text:'+'+baht(amount),x:h.x,y:h.y-95,life:1.8,color:'#3d9a5b'});
+      closeModal(); updateHud();
+      const L=lvl(myExp()).lv;
+      toast(offline?'ไม่มีสัญญาณ เก็บไว้ในเครื่องแล้ว จะส่งเข้าชีตให้อัตโนมัติ':L>before?'เลเวลอัป! Lv'+L+' '+rank(L):'บันทึกแล้ว (เก็บสำเนาในเครื่องด้วย): '+RESULTS[pick].label);
+    }catch(e){ send.disabled=false; send.textContent='บันทึกผล'; $('#qerr').textContent='บันทึกไม่ได้: '+(e.message||e)+' ลองใหม่อีกครั้ง'; }
+  };
+}
+
+
+// ===================== สมุดบันทึกในเครื่อง =====================
+// เก็บสำเนาทุกการลงพื้นที่ไว้ในเครื่องนี้ (localStorage) ดูย้อนหลังได้แม้ไม่มีสัญญาณ
+// รายการที่ส่งไม่สำเร็จ (status: pending) จะถูกส่งเข้าชีตใหม่อัตโนมัติเมื่อมีสัญญาณ
+const JKEY='vq-journal';
+const journal={
+  all(){return store.get(JKEY)||[]},
+  save(a){store.set(JKEY,a);updateBadge()},
+  add(j){const a=this.all();a.push(j);this.save(a)},
+  pending(){return this.all().filter(j=>j.status==='pending'&&j.player===state.player)},
+  mark(id){const a=this.all();const j=a.find(x=>x.id===id);if(j)j.status='sent';this.save(a)},
+};
+function updateBadge(){const n=journal.pending().length,b=$('#pendBadge');b.hidden=!n;b.textContent=n}
+let syncing=false;
+async function syncPending(){
+  if(syncing||DEMO) return 0; syncing=true; let ok=0;
+  try{
+    for(const j of journal.pending()){
+      try{
+        await api.submit({player:j.player,key:j.key,sheet:j.sheet,contract:j.contract,project:j.project,tambon:j.tambon,result:j.result,amount:j.amount,appt:j.appt,note:j.note});
+        journal.mark(j.id); const e=state.log.find(e=>e.pending===j.id); if(e) delete e.pending; ok++;
+      }catch(err){ if(err&&err.fatal){journal.mark(j.id)} else break; }
+    }
+  }finally{ syncing=false; updateBadge(); }
+  if(ok) toast('ส่งบันทึกที่ค้างในเครื่องเข้าชีตแล้ว '+ok+' รายการ');
+  return ok;
+}
+const monthKey=ts=>{const d=new Date(ts);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')};
+const monthName=k=>{const [y,m]=k.split('-');return new Date(+y,+m-1,1).toLocaleDateString('th-TH',{month:'long',year:'numeric'})};
+function journalCSV(list){
+  const head=['วันที่','เวลา','พัฒนากร','ชีต','เลขที่สัญญา','ชื่อโครงการ','ตำบล','หมู่','ผล','จำนวนเงิน','วันนัด','บันทึก','สถานะส่ง'];
+  const q=v=>{v=String(v??'');if(/^[=+\-@]/.test(v))v="'"+v;return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
+  const rows=list.map(j=>{const d=new Date(j.ts);return [d.toLocaleDateString('th-TH'),d.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}),j.player,j.sheet,j.contract,j.project,j.tambon,j.moo,
+    RESULTS[j.result]?RESULTS[j.result].label:j.result,j.amount||'',j.appt||'',j.note||'',j.status==='pending'?'รอส่ง':'ส่งแล้ว'].map(q).join(',')});
+  return '﻿'+[head.join(','),...rows].join('\n');
+}
+function journalText(list){
+  return list.map(j=>{const d=new Date(j.ts);return d.toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'})+' '+d.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})+
+    ' | '+j.project+' ต.'+j.tambon+(j.moo?' ม.'+j.moo:'')+' | '+(RESULTS[j.result]?RESULTS[j.result].label:j.result)+(+j.amount?' '+baht(j.amount):'')+(j.appt?' นัด '+j.appt:'')+(j.note?' | '+j.note:'')}).join('\n');
+}
+function journalDialog(mk){
+  const mine=journal.all().filter(j=>j.player===state.player).sort((a,b)=>b.ts.localeCompare(a.ts));
+  const months=[...new Set(mine.map(j=>monthKey(j.ts)))];
+  mk=mk||months[0]||monthKey(new Date());
+  const list=mk==='all'?mine:mine.filter(j=>monthKey(j.ts)===mk);
+  const pend=journal.pending().length;
+  const groups={};list.forEach(j=>{const d=new Date(j.ts).toLocaleDateString('th-TH',{weekday:'short',day:'numeric',month:'short',year:'2-digit'});(groups[d]=groups[d]||[]).push(j)});
+  const visits=list.filter(j=>RESULTS[j.result]&&RESULTS[j.result].visit);
+  openModal(`<h2>สมุดบันทึกของ${esc(state.player)}</h2>
+    <p class="sub">เก็บไว้ในเครื่องนี้ เปิดดูได้แม้ไม่มีสัญญาณ${DEMO?' · โหมดทดลอง':''}</p>
+    <select id="jm" aria-label="เดือน">${months.map(m=>`<option value="${m}" ${m===mk?'selected':''}>${monthName(m)}</option>`).join('')}<option value="all" ${mk==='all'?'selected':''}>ทั้งหมด</option></select>
+    <div class="stats">
+      <div class="stat"><b>${list.length}</b><span>ครั้งที่บันทึก</span></div>
+      <div class="stat"><b>${new Set(visits.map(j=>j.key)).size}</b><span>กลุ่มที่เยี่ยม</span></div>
+      <div class="stat"><b>${baht(list.reduce((a,j)=>a+(j.result==='paid'?+j.amount||0:0),0))}</b><span>รับชำระ</span></div>
+      <div class="stat"><b>${list.filter(j=>j.result==='appt').length}</b><span>นัดชำระ</span></div>
+    </div>
+    ${pend?`<p class="err">มี ${pend} รายการยังไม่ได้ส่งเข้าชีต (ไม่มีสัญญาณตอนบันทึก)</p>`:''}
+    ${Object.entries(groups).map(([d,js])=>`<div class="jday">${d}</div><div class="list">${js.map(j=>`<div class="li"><div class="t">${esc(trunc(j.project||'',26))}
+      <span class="chip" style="background:${j.result==='paid'?'#3d9a5b':j.result==='none'?'#9aa0a6':'#4fa3e0'}">${esc(RESULTS[j.result]?RESULTS[j.result].label:j.result)}</span>
+      ${j.status==='pending'?'<span class="chip" style="background:#d93b3b">รอส่ง</span>':''}
+      <small>${new Date(j.ts).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})} น. · ต.${esc(j.tambon)}${j.moo?' ม.'+esc(j.moo):''}${+j.amount?' · '+baht(j.amount):''}${j.appt?' · นัด '+esc(j.appt):''}</small>
+      ${j.note?`<small style="white-space:normal">${esc(j.note)}</small>`:''}</div>
+      <button class="go alt" data-open="${esc(j.key)}">ดู</button></div>`).join('')}</div>`).join('')||'<p class="sub">ยังไม่มีบันทึกในเดือนนี้ ลองเดินไปทำเควสที่บ้านที่มี ! ดูนะ</p>'}
+    <div class="row">${pend&&!DEMO?'<button class="btn pri" id="jsync">ส่งที่ค้าง</button>':''}<button class="btn" id="jcsv">ดาวน์โหลด CSV</button><button class="btn" id="jcopy">คัดลอก</button></div>
+    <div class="row"><button class="btn" data-close>ปิด</button></div>
+    <p class="note">บันทึกในเครื่องจะหายถ้าล้างข้อมูลเบราว์เซอร์หรือเปลี่ยนเครื่อง ข้อมูลหลักอยู่ในชีต "บันทึกติดตาม" เสมอ (ยกเว้นรายการที่ขึ้นว่ารอส่ง) · โทรศัพท์ควรตั้งรหัสล็อกหน้าจอ</p>`);
+  const b=$('#modalBody');
+  b.querySelectorAll('[data-open]').forEach(g=>g.onclick=()=>{const h=houses.find(h=>h.c.key===g.dataset.open);if(h)questDialog(h.c);else toast('ไม่พบสัญญานี้ในชีตแล้ว')});
+  $('#jm').onchange=()=>journalDialog($('#jm').value);
+  const js=$('#jsync'); if(js) js.onclick=async()=>{js.disabled=true;const n=await syncPending();if(!n)toast('ยังส่งไม่ได้ ลองใหม่เมื่อมีสัญญาณ');journalDialog(mk);updateHud()};
+  $('#jcsv').onclick=()=>{
+    try{const blob=new Blob([journalCSV(list)],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');
+      a.href=URL.createObjectURL(blob);a.download='บันทึกเยี่ยม_'+(mk==='all'?'ทั้งหมด':mk)+'.csv';document.body.appendChild(a);a.click();a.remove();
+      setTimeout(()=>URL.revokeObjectURL(a.href),4000);toast('กำลังดาวน์โหลด ถ้าไม่มีไฟล์ขึ้น ให้ใช้ปุ่มคัดลอกแทน');}
+    catch(e){toast('ดาวน์โหลดไม่ได้ในหน้านี้ ใช้ปุ่มคัดลอกแทน')}
+  };
+  $('#jcopy').onclick=()=>{
+    const txt=journalText(list);
+    const fallback=()=>{const ta=document.createElement('textarea');ta.value=txt;ta.style.cssText='width:100%;min-height:120px;margin-top:8px';b.appendChild(ta);ta.focus();ta.select();toast('คัดลอกอัตโนมัติไม่ได้ เลือกข้อความด้านล่างแล้วกดคัดลอกเอง')};
+    try{navigator.clipboard.writeText(txt).then(()=>toast('คัดลอกแล้ว วางในไลน์หรือโน้ตได้เลย'),fallback)}catch(e){fallback()}
+  };
+}
+
+// ===================== เริ่มเกม =====================
+async function loadData(keepPos){
+  const res=await api.load();
+  state.all=resolveArea(res.rows.map(r=>parseRow(r.sheet,r.v)).filter(Boolean));
+  state.sheetYears=(res.sheets||[]).map(sheetToYear).filter(Boolean);
+  state.log=(res.log||[]).concat(journal.pending().map(j=>({ts:j.ts,player:j.player,key:j.key,result:j.result,amount:j.amount,appt:j.appt,note:j.note,exp:j.exp,pending:j.id})));
+  applyScope(keepPos);
+  setTimeout(syncPending,800);
+  updateHud();
+}
+$('#loginNote').textContent=DEMO
+  ?'ลิงก์นี้เป็นโหมดทดลอง ใช้ข้อมูลสมมติที่มีโครงสร้างเหมือนชีตจริง (ไม่มีชื่อคนจริง) ข้อมูลจริงจะเปิดผ่าน Google Apps Script ด้วยบัญชีของคุณเท่านั้น'
+  :'ข้อมูลผู้กู้เป็นความลับของทางราชการ ห้ามแคปหน้าจอส่งต่อ';
+$('#inName').value=store.get('vq-name')||'';
+// เล่นแนวนอน: ขอเต็มจอแล้วล็อกการหมุนจอ (ได้บน Android Chrome · iPhone ต้องหมุนเครื่องเอง)
+async function goLandscape(){
+  let ok=false;
+  try{ if(!document.fullscreenElement&&document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen({navigationUI:'hide'}); }catch(e){}
+  try{ if(screen.orientation&&screen.orientation.lock){ await screen.orientation.lock('landscape'); ok=true; } }catch(e){}
+  if(!ok) toast('หมุนโทรศัพท์เป็นแนวนอนได้เลย ถ้าจอไม่หมุน ให้ปิดล็อกการหมุนจอในแถบตั้งค่าด่วน');
+  return ok;
+}
+$('#btnLand').addEventListener('click',async()=>{await goLandscape(); if($('#inName').value.trim()) $('#loginForm').requestSubmit();});
+const isPortrait=()=>innerHeight>innerWidth&&innerWidth<700;
+$('#loginForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const name=$('#inName').value.trim();
+  if(!name){$('#loginErr').textContent='ใส่ชื่อก่อนนะ';return}
+  state.player=name; store.set('vq-name',name);
+  $('#btnStart').disabled=true; $('#btnStart').textContent='กำลังโหลดข้อมูล…'; $('#loginErr').textContent='';
+  try{
+    await loadData();
+    $('#login').hidden=true; $('#hud').hidden=false; $('#demoTag').hidden=!DEMO; state.running=true;
+    toast(isPortrait()?'แนะนำให้หมุนโทรศัพท์เป็นแนวนอน · แตะพื้นเพื่อเดิน ลากเพื่อเลื่อนแผนที่':'แตะพื้นเพื่อเดิน แตะบ้านเพื่อดูข้อมูล ลากเพื่อเลื่อนแผนที่');
+  }catch(err){ $('#loginErr').textContent=err.message||String(err); $('#btnStart').disabled=false; $('#btnStart').textContent='เริ่มเควส'; }
+});
+resize(); requestAnimationFrame(loop);
+</script>
+</body>
+</html>

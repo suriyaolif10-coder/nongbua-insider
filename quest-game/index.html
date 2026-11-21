@@ -19,7 +19,7 @@
 [hidden]{display:none!important}
 html,body{height:100%;margin:0;overflow:hidden;background:var(--grass);color:var(--ink);font-family:var(--font);
   -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:none}
-canvas#game{position:fixed;inset:0;display:block}
+canvas#game{position:fixed;inset:0;width:100%;height:100%;display:block}
 button,select{font-family:inherit;cursor:pointer}
 button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--exp);outline-offset:2px}
 
@@ -245,13 +245,13 @@ function buildWorld(){
   state.contracts.forEach(c=>(by[c.tambon]=by[c.tambon]||[]).push(c));
   const names=Object.keys(by).sort((a,b)=>(a==='ไม่ระบุตำบล')-(b==='ไม่ระบุตำบล')||by[b].length-by[a].length);
   const maxN=Math.max(1,...names.map(n=>by[n].length));
-  const SX=180,SY=190;
+  const SX=150,SY=172; // ระยะห่างบ้าน (ย่อให้แผนที่กะทัดรัด)
   const slotsFor=(gc,gr,cx,cy)=>{const s=[];for(let r=0;r<gr;r++)for(let c=0;c<gc;c++){
       const x=cx-(gc-1)*SX/2+c*SX, y=cy-(gr-1)*SY/2+r*SY+50;
       if(Math.abs(x-cx)<SX*.95&&Math.abs(y-cy)<SY*.75) continue; s.push({x,y});}
     return s.sort((a,b)=>Math.hypot(a.x-cx,(a.y-cy)*1.2)-Math.hypot(b.x-cx,(b.y-cy)*1.2));};
   let gc=5; while(slotsFor(gc,gc-1,0,0).length<maxN) gc++;
-  const gr=gc-1, CW=gc*SX+160, CH=gr*SY+230;
+  const gr=gc-1, CW=gc*SX+90, CH=gr*SY+150;
   const n=names.length+1, cols=Math.ceil(Math.sqrt(n)), rows=Math.ceil(n/cols);
   W=cols*CW; H=rows*CH;
   const cells=[];for(let r=0;r<rows;r++)for(let c=0;c<cols;c++)cells.push({x:c*CW+CW/2,y:r*CH+CH/2});
@@ -333,7 +333,8 @@ let DPR=1,VW=0,VH=0,Z=1,cam={x:0,y:0},zoom=null;
 function zMin(){return Math.min(VW/W,VH/H)}
 function zMax(){return VW<700?1.1:1.4}
 function setZoom(z){zoom=Math.max(zMin(),Math.min(zMax(),z));Z=zoom}
-function resize(){DPR=Math.min(devicePixelRatio||1,2);VW=innerWidth;VH=innerHeight;cv.width=VW*DPR;cv.height=VH*DPR;setZoom(zoom??(VW<700?.55:.7))}
+function resize(){DPR=Math.min(devicePixelRatio||1,2);VW=innerWidth;VH=innerHeight;cv.width=VW*DPR;cv.height=VH*DPR;setZoom(zoom??DEF_ZOOM())}
+function DEF_ZOOM(){return VW<700?.4:.5}
 addEventListener('resize',resize);
 
 function label(t,x,y,size,fill,stroke,w){
@@ -384,8 +385,11 @@ function drawHouse(h,t){
   const paid=c.st.key==='paid', vis=!paid&&visitedThisMonth(c);
   const by=y-100+(paid||vis?0:Math.sin(t*4+x)*4);
   ctx.fillStyle=paid?'#3d9a5b':vis?'#ffffff':c.st.color;ctx.strokeStyle=vis?'#3d9a5b':'#24321f';ctx.lineWidth=2.5;
-  ctx.beginPath();ctx.arc(x,by,13,0,7);ctx.fill();ctx.stroke();
-  ctx.fillStyle=vis?'#3d9a5b':'#fff';ctx.font='600 16px Mitr, sans-serif';ctx.textAlign='center';ctx.fillText(paid?'★':vis?'✓':'!',x,by+6);
+  const mk=Math.min(2.6,Math.max(1,.45/Z)); // ซูมออกมาก ๆ เครื่องหมายสถานะยังเห็นชัด
+  ctx.save();ctx.translate(x,by);ctx.scale(mk,mk);
+  ctx.beginPath();ctx.arc(0,0,13,0,7);ctx.fill();ctx.stroke();
+  ctx.fillStyle=vis?'#3d9a5b':'#fff';ctx.font='600 16px Mitr, sans-serif';ctx.textAlign='center';ctx.fillText(paid?'★':vis?'✓':'!',0,6);
+  ctx.restore();
   if(state.tracked===c.key){ctx.strokeStyle='#4fa3e0';ctx.lineWidth=4;ctx.setLineDash([8,6]);ctx.beginPath();ctx.ellipse(x,y+20,72,24,0,0,7);ctx.stroke();ctx.setLineDash([])}
 }
 function drawTree(tr){
@@ -446,7 +450,7 @@ function render(t){
   items.push({y:player.y,f:()=>{person(player.x,player.y,{officer:true,shirt:'#c9b37e',hat:'#b09a62',dir:player.dir,walking:player.walking},t);label('Lv'+lvl(myExp()).lv+' พัฒนากร'+state.player,player.x,player.y-92,14)}});
   items.sort((a,b)=>a.y-b.y).forEach(i=>i.f());
   // ป้ายตำบลตัวใหญ่ตอนซูมออก
-  if(Z<.4) for(const c of clusters) label('ต.'+c.name,c.x,c.y-130,Math.min(90,14/Z),'#2f6f4f','#fff',600);
+  if(Z<.5) for(const c of clusters) label('ต.'+c.name,c.x,c.y-110,Math.min(110,15/Z),'#2f6f4f','#fff',600);
   // ลูกศรนำทาง
   const tq=houses.find(h=>h.c.key===state.tracked);
   if(tq){const a=Math.atan2(tq.y-player.y,tq.x-player.x),d=Math.hypot(tq.y-player.y,tq.x-player.x);
@@ -530,7 +534,7 @@ $('#btnList').addEventListener('click',()=>boardDialog());
 $('#btnSum').addEventListener('click',summaryDialog);
 $('#zOut').addEventListener('click',()=>setZoom(Z/1.25));
 $('#zIn').addEventListener('click',()=>setZoom(Z*1.25));
-$('#zAll').addEventListener('click',()=>{setZoom(Z<=zMin()+.001?(VW<700?.55:.7):zMin())});
+$('#zAll').addEventListener('click',()=>{setZoom(Z<=zMin()+.001?DEF_ZOOM():zMin())});
 cv.addEventListener('wheel',e=>{e.preventDefault();setZoom(Z*(e.deltaY>0?.9:1.1))},{passive:false});
 
 function summarize(list){

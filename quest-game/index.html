@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="th">
+<head>
+<title>เควสหมู่บ้าน</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mitr:wght@300;400;500;600&display=swap">
+<style>
+/* Layout: full-screen canvas village; HUD floats in the four corners like a mobile RPG. Single daytime look, so colors are fixed (no dark variant). */
+:root{
+  --grass:#7cc06a; --ink:#24321f; --paper:#fffdf5; --paper-2:#f3eedc;
+  --wood:#8a5a32; --gold:#f2b632; --exp:#4fa3e0; --hp:#e2586a;
+  --ok:#3d9a5b; --warn:#d98a1c; --muted:#6c7562;
+  --font:'Mitr','Noto Sans Thai','Leelawadee UI',Tahoma,sans-serif;
+  color-scheme:light;
+}
+html,body{height:100%;margin:0;overflow:hidden;background:var(--grass);color:var(--ink);font-family:var(--font);
+  -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:none}
+canvas#game{position:fixed;inset:0;display:block}
+[hidden]{display:none!important}
+button{font-family:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid var(--exp);outline-offset:2px}
+
+/* HUD */
+.hud{position:fixed;inset:0;pointer-events:none}
+.hud > *{pointer-events:auto}
+.me{position:absolute;top:calc(10px + env(safe-area-inset-top,0px));left:calc(10px + env(safe-area-inset-left,0px));
+  background:rgba(255,253,245,.92);border:2px solid var(--ink);border-radius:14px;padding:8px 12px 10px;min-width:190px;max-width:62vw;
+  box-shadow:0 3px 0 var(--ink)}
+.me-top{display:flex;align-items:center;gap:8px}
+.ava{width:34px;height:34px;border-radius:50%;background:var(--gold);border:2px solid var(--ink);display:grid;place-items:center;font-weight:600}
+.me-name{font-weight:500;font-size:15px;line-height:1.1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.me-lv{font-size:12px;color:var(--muted)}
+.bar{height:9px;border-radius:6px;background:#d9d3bf;border:1.5px solid var(--ink);overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;background:var(--exp);transition:width .4s}
+.bar.team i{background:var(--ok)}
+.me-row{display:flex;justify-content:space-between;font-size:11.5px;margin-top:3px;font-variant-numeric:tabular-nums;gap:8px}
+.tr{position:absolute;top:calc(10px + env(safe-area-inset-top,0px));right:calc(10px + env(safe-area-inset-right,0px));display:flex;gap:8px;align-items:flex-start}
+.ibtn{width:44px;height:44px;border-radius:12px;border:2px solid var(--ink);background:var(--paper);box-shadow:0 3px 0 var(--ink);font-size:13px;font-weight:500;line-height:1}
+.ibtn:active{transform:translateY(2px);box-shadow:0 1px 0 var(--ink)}
+#mini{width:104px;height:104px;border-radius:50%;border:3px solid var(--gold);background:#9fd38c;box-shadow:0 3px 0 var(--ink)}
+.demo{position:absolute;top:calc(120px + env(safe-area-inset-top,0px));right:calc(10px + env(safe-area-inset-right,0px));
+  background:var(--warn);color:#fff;font-size:11px;padding:3px 8px;border-radius:8px}
+.joy{position:absolute;left:calc(22px + env(safe-area-inset-left,0px));bottom:calc(22px + env(safe-area-inset-bottom,0px));
+  width:130px;height:130px;border-radius:50%;background:rgba(255,255,255,.28);border:2px solid rgba(255,255,255,.6);touch-action:none}
+.knob{position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px 0 0 -28px;border-radius:50%;background:#fff;box-shadow:0 3px 8px rgba(0,0,0,.25)}
+.act{position:absolute;right:calc(22px + env(safe-area-inset-right,0px));bottom:calc(26px + env(safe-area-inset-bottom,0px));
+  width:96px;height:96px;border-radius:50%;border:3px solid var(--ink);background:var(--hp);color:#fff;font-size:17px;font-weight:600;
+  box-shadow:0 4px 0 var(--ink);transition:background .2s,opacity .2s}
+.act[data-on="0"]{background:#b9b3a1;opacity:.85}
+.act:active{transform:translateY(3px);box-shadow:0 1px 0 var(--ink)}
+.toast{position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top,0px));transform:translateX(-50%);background:rgba(36,50,31,.9);color:#fff;
+  padding:8px 14px;border-radius:10px;font-size:14px;max-width:80vw;text-align:center;transition:opacity .3s;opacity:0;pointer-events:none;z-index:30}
+.toast.show{opacity:1}
+
+/* Panels */
+.veil{position:fixed;inset:0;background:rgba(20,30,15,.45);display:grid;place-items:center;z-index:20;
+  padding:16px max(16px,env(safe-area-inset-right,0px)) 16px max(16px,env(safe-area-inset-left,0px))}
+.panel{background:var(--paper);border:3px solid var(--ink);border-radius:18px;box-shadow:0 6px 0 var(--ink);width:min(440px,100%);
+  max-height:calc(100% - 20px);overflow:auto;padding:18px 18px 16px;-webkit-user-select:text;user-select:text;touch-action:auto}
+.panel h2{margin:0 0 2px;font-size:21px;font-weight:600;text-wrap:balance}
+.sub{color:var(--muted);font-size:13px;margin:0 0 12px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:14px;background:var(--paper-2);border-radius:10px;padding:10px 12px;margin-bottom:12px}
+.kv b{font-weight:500;color:var(--muted)}
+.kv span{font-variant-numeric:tabular-nums;min-width:0}
+.opts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.opt{border:2px solid var(--ink);border-radius:12px;background:#fff;padding:9px 8px;text-align:left;font-size:14px;line-height:1.25}
+.opt small{display:block;color:var(--muted);font-size:11.5px}
+.opt[aria-pressed="true"]{background:var(--gold);box-shadow:inset 0 -3px 0 rgba(0,0,0,.15)}
+label.f{display:block;font-size:13px;color:var(--muted);margin:6px 0 4px}
+.panel input,.panel textarea{width:100%;box-sizing:border-box;font:inherit;font-size:16px;border:2px solid var(--ink);border-radius:10px;padding:8px 10px;background:#fff;color:var(--ink)}
+.panel textarea{min-height:64px;resize:vertical}
+.row{display:flex;gap:8px;margin-top:14px}
+.btn{flex:1;border:2px solid var(--ink);border-radius:12px;padding:11px;font-size:16px;font-weight:500;background:#fff;box-shadow:0 3px 0 var(--ink);color:var(--ink)}
+.btn.pri{background:var(--ok);color:#fff}
+.btn:disabled{opacity:.5}
+.list{display:flex;flex-direction:column;gap:6px}
+.li{display:flex;align-items:center;gap:10px;border:2px solid var(--ink);border-radius:12px;padding:8px 10px;background:#fff}
+.li .t{flex:1;min-width:0;font-size:14px}
+.li .t small{display:block;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip{font-size:11px;padding:2px 8px;border-radius:999px;color:#fff;white-space:nowrap}
+.chip.open{background:var(--warn)}.chip.done{background:var(--ok)}
+.go{border:2px solid var(--ink);border-radius:10px;background:var(--exp);color:#fff;padding:6px 10px;font-size:13px}
+.note{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.5}
+.err{color:#b3261e;font-size:13px;min-height:18px;margin-top:6px}
+
+/* Login */
+.login .panel{text-align:center}
+.logo{font-size:30px;font-weight:600;line-height:1.1;margin:4px 0 4px;color:var(--wood)}
+.login .panel input{text-align:center;margin-bottom:4px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<canvas id="game" aria-label="แผนที่หมู่บ้าน"></canvas>
+
+<div class="hud" id="hud" hidden>
+  <div class="me">
+    <div class="me-top"><div class="ava" id="ava">?</div>
+      <div style="min-width:0"><div class="me-name" id="meName">-</div><div class="me-lv" id="meLv">เลเวล 1</div></div></div>
+    <div class="bar"><i id="expBar" style="width:0%"></i></div>
+    <div class="me-row"><span>EXP</span><span id="expTxt">0 / 40</span></div>
+    <div class="bar team"><i id="teamBar" style="width:0%"></i></div>
+    <div class="me-row"><span>ยอดทีมเดือนนี้</span><span id="teamTxt">0 / 0</span></div>
+  </div>
+  <div class="tr">
+    <button class="ibtn" id="btnList" aria-label="กระดานเควส">เควส</button>
+    <canvas id="mini" width="208" height="208" aria-label="แผนที่ย่อ"></canvas>
+  </div>
+  <div class="demo" id="demoTag" hidden>โหมดทดลอง</div>
+  <div class="joy" id="joy" aria-hidden="true"><div class="knob" id="knob"></div></div>
+  <button class="act" id="act" data-on="0">สำรวจ</button>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<div class="veil login" id="login">
+  <form class="panel" id="loginForm" autocomplete="off">
+    <div class="logo">เควสหมู่บ้าน</div>
+    <p class="sub" id="teamName">ภารกิจติดตามงวดชำระ กลุ่มออมทรัพย์</p>
+    <label class="f" for="inName">ชื่อทีมงาน</label>
+    <input id="inName" maxlength="30" placeholder="เช่น พี่แดง" required>
+    <label class="f" for="inPin">รหัสทีม</label>
+    <input id="inPin" type="password" inputmode="numeric" maxlength="20" placeholder="รหัสที่ประธานให้">
+    <div class="err" id="loginErr"></div>
+    <div class="row"><button class="btn pri" id="btnStart" type="submit">เริ่มเควส</button></div>
+    <p class="note" id="loginNote"></p>
+  </form>
+</div>
+
+<div class="veil" id="modal" hidden><div class="panel" id="modalBody" role="dialog" aria-modal="true"></div></div>
+
+<script>
+// ===================== ตั้งค่า =====================
+// วาง URL ของ Google Apps Script Web App ตรงนี้ (เว้นว่าง = โหมดทดลองด้วยข้อมูลตัวอย่าง)
+const CONFIG = {
+  API_URL: '',
+  TEAM_NAME: 'ภารกิจติดตามงวดชำระ กลุ่มออมทรัพย์',
+};
+// ผลการติดตาม: EXP ที่ได้ และเควสปิดหรือยัง (ต้องตรงกับ Code.gs)
+const RESULTS = {
+  paid:    {label:'รับชำระแล้ว',        hint:'ได้รับเงินงวดนี้',          exp:50, close:true},
+  plan:    {label:'นัดผ่อนชำระ',         hint:'ตกลงวันจ่าย/แผนผ่อน',       exp:30, close:true},
+  help:    {label:'ส่งต่อคณะกรรมการ',    hint:'ลำบากจริง ต้องช่วยหาทางออก', exp:20, close:true},
+  visited: {label:'ไม่พบเจ้าของบ้าน',    hint:'มาใหม่ภายหลัง',             exp:10, close:false},
+};
+
+// ===================== ข้อมูล =====================
+const DEMO = !CONFIG.API_URL;
+const store = {
+  get(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } },
+  set(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} },
+};
+function demoQuests(){
+  const zones=['หมู่ 1','หมู่ 2','หมู่ 3'];
+  const tasks=['เยี่ยมติดตามงวด พ.ย.','ติดตามงวดค้าง 2 เดือน','ทวนนัดผ่อนที่ตกลงไว้','แจ้งวันประชุมกลุ่ม + ติดตามงวด'];
+  const owed=[1500,800,2400,600,1200,3000,900,1800,500,2000,1000,700];
+  return owed.map((o,i)=>({
+    quest_id:'Q'+String(i+1).padStart(3,'0'),
+    house_code:'บ้าน '+'กขค'[i%3]+'-'+String(i+3).padStart(2,'0'),
+    zone:zones[i%3], task:tasks[i%4], owed:o, status:'open', last_note:'', map_x:'', map_y:''
+  }));
+}
+const api = {
+  async load(player,pin){
+    if(DEMO){
+      const s=store.get('vq-demo')||{};
+      const quests=s.quests||demoQuests();
+      const exp=(s.exp&&s.exp[player])||0;
+      const collected=s.collected||0;
+      return {ok:true, quests, me:{exp}, team:{collected, target:15000,
+        players:[{name:player,exp},{name:'พี่แดง (ตัวอย่าง)',exp:140},{name:'น้องฝน (ตัวอย่าง)',exp:90}]}};
+    }
+    const u=CONFIG.API_URL+'?action=load&player='+encodeURIComponent(player)+'&pin='+encodeURIComponent(pin);
+    const r=await fetch(u); return r.json();
+  },
+  async submit(p){
+    if(DEMO){
+      const s=store.get('vq-demo')||{quests:state.quests,exp:{},collected:0};
+      s.quests=state.quests; s.exp=s.exp||{};
+      s.exp[p.player]=(s.exp[p.player]||0)+RESULTS[p.result].exp;
+      if(p.result==='paid') s.collected=(s.collected||0)+(+p.amount||0);
+      store.set('vq-demo',s);
+      const players=state.team.players.map(x=>x.name===p.player?{...x,exp:s.exp[p.player]}:x);
+      return {ok:true, gained:RESULTS[p.result].exp, me:{exp:s.exp[p.player]}, team:{...state.team, players, collected:s.collected}};
+    }
+    // ส่งเป็น text/plain เพื่อไม่ให้เกิด CORS preflight กับ Apps Script
+    const r=await fetch(CONFIG.API_URL,{method:'POST',body:JSON.stringify({action:'submit',...p})});
+    return r.json();
+  }
+};
+
+// ===================== สถานะเกม =====================
+const state = { player:'', pin:'', exp:0, quests:[], team:{collected:0,target:0,players:[]}, tracked:null, running:false };
+const W=2400, H=1600, PLAZA={x:1200,y:800,r:210};
+const player={x:1200,y:950,vx:0,vy:0,dir:1,walk:0};
+let houses=[], trees=[], decor=[], floats=[], npcs=[];
+
+function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+
+function buildWorld(){
+  // ช่องวางบ้านเป็นวงรีรอบลานกลาง
+  const slots=[];
+  [[430,8],[650,12],[870,16]].forEach(([r,n],ring)=>{
+    for(let i=0;i<n;i++){
+      const a=(i/n)*Math.PI*2+ring*0.35;
+      slots.push({x:PLAZA.x+Math.cos(a)*r*1.45, y:PLAZA.y+Math.sin(a)*r*0.78});
+    }
+  });
+  const roofs=['#c8553d','#3f7cac','#8e5aa8','#d98a1c','#2f8f6b','#b2456e'];
+  let si=0;
+  houses=state.quests.map((q,i)=>{
+    let x,y;
+    const mx=parseFloat(q.map_x), my=parseFloat(q.map_y);
+    if(!isNaN(mx)&&!isNaN(my)){ x=mx/100*W; y=my/100*H; }
+    else { const s=slots[si++%slots.length]; x=s.x; y=s.y; }
+    x=Math.max(90,Math.min(W-90,x)); y=Math.max(110,Math.min(H-70,y));
+    return {q, x, y, roof:roofs[i%roofs.length]};
+  });
+  const R=rng(42); trees=[]; decor=[];
+  for(let k=0;k<400&&trees.length<120;k++){
+    const x=40+R()*(W-80), y=40+R()*(H-80);
+    if(Math.hypot(x-PLAZA.x,(y-PLAZA.y)*1.3)<PLAZA.r+120) continue;
+    if(houses.some(h=>Math.abs(h.x-x)<110&&Math.abs(h.y-y)<110)) continue;
+    if(trees.some(t=>Math.hypot(t.x-x,t.y-y)<70)) continue;
+    trees.push({x,y,s:.8+R()*.5});
+  }
+  for(let k=0;k<260;k++) decor.push({x:R()*W,y:R()*H,t:R()<.7?0:1,c:['#f6d55c','#ffffff','#f28aa6'][k%3]});
+  npcs=[
+    {id:'chair',x:PLAZA.x-70,y:PLAZA.y-20,name:'ประธานกลุ่ม',hat:'#b2456e',shirt:'#f2b632'},
+    {id:'board',x:PLAZA.x+80,y:PLAZA.y-40,name:'กระดานเควส'}
+  ];
+}
+
+// ===================== อินพุต =====================
+const keys={};
+addEventListener('keydown',e=>{
+  if(!$('#modal').hidden||!state.running) { if(e.key==='Escape') closeModal(); return; }
+  keys[e.key.toLowerCase()]=true;
+  if(e.key===' '||e.key==='Enter'||e.key.toLowerCase()==='e'){ e.preventDefault(); doAction(); }
+});
+addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false});
+const joy={x:0,y:0,id:null};
+(function(){
+  const el=document.getElementById('joy'), kn=document.getElementById('knob');
+  function upd(e){const r=el.getBoundingClientRect();let dx=e.clientX-(r.left+r.width/2),dy=e.clientY-(r.top+r.height/2);
+    const m=Math.hypot(dx,dy),max=r.width/2-14; if(m>max){dx*=max/m;dy*=max/m}
+    joy.x=dx/max; joy.y=dy/max; kn.style.transform=`translate(${dx}px,${dy}px)`;}
+  el.addEventListener('pointerdown',e=>{joy.id=e.pointerId;el.setPointerCapture(e.pointerId);upd(e)});
+  el.addEventListener('pointermove',e=>{if(e.pointerId===joy.id)upd(e)});
+  const end=e=>{if(e.pointerId!==joy.id)return;joy.id=null;joy.x=joy.y=0;kn.style.transform=''};
+  el.addEventListener('pointerup',end); el.addEventListener('pointercancel',end);
+})();
+
+// ===================== ฟิสิกส์ =====================
+function blocked(x,y){
+  if(x<20||y<30||x>W-20||y>H-10) return true;
+  for(const h of houses) if(x>h.x-58&&x<h.x+58&&y>h.y-46&&y<h.y+16) return true;
+  for(const t of trees) if(Math.hypot(x-t.x,(y-t.y)*1.6)<20*t.s) return true;
+  for(const n of npcs) if(Math.hypot(x-n.x,(y-n.y)*1.6)<22) return true;
+  return false;
+}
+function nearest(){
+  let best=null,bd=95;
+  for(const h of houses){const d=Math.hypot(player.x-h.x,player.y-(h.y+30));if(d<bd){bd=d;best={type:'house',h}}}
+  for(const n of npcs){const d=Math.hypot(player.x-n.x,player.y-n.y);if(d<bd){bd=d;best={type:n.id,n}}}
+  return best;
+}
+
+// ===================== วาด =====================
+const cv=document.getElementById('game'), ctx=cv.getContext('2d');
+const mini=document.getElementById('mini'), mctx=mini.getContext('2d');
+let DPR=1,VW=0,VH=0,Z=1,cam={x:0,y:0};
+function resize(){DPR=Math.min(devicePixelRatio||1,2);VW=innerWidth;VH=innerHeight;cv.width=VW*DPR;cv.height=VH*DPR;Z=VW<700?.78:1}
+addEventListener('resize',resize); resize();
+
+function label(t,x,y,size,fill,stroke){
+  ctx.font=`500 ${size}px Mitr, Tahoma, sans-serif`;ctx.textAlign='center';ctx.lineJoin='round';
+  ctx.lineWidth=4;ctx.strokeStyle=stroke||'rgba(255,255,255,.95)';ctx.strokeText(t,x,y);ctx.fillStyle=fill||'#24321f';ctx.fillText(t,x,y);
+}
+function shadow(x,y,w){ctx.fillStyle='rgba(0,0,0,.16)';ctx.beginPath();ctx.ellipse(x,y,w,w*.38,0,0,7);ctx.fill()}
+function person(x,y,o,t){
+  const bob=o.walking?Math.abs(Math.sin(t*12))*3:0;
+  shadow(x,y,17);
+  ctx.save();ctx.translate(x,y-bob);
+  ctx.fillStyle='#3b3b3b';ctx.fillRect(-9,-12,7,12);ctx.fillRect(2,-12,7,12);         // ขา
+  ctx.fillStyle=o.shirt;ctx.beginPath();ctx.roundRect(-14,-38,28,28,8);ctx.fill();  // ตัว
+  ctx.fillStyle='#f3c9a0';ctx.beginPath();ctx.arc(0,-52,17,0,7);ctx.fill();         // หัว
+  ctx.fillStyle='#3a2a20';ctx.beginPath();ctx.arc(0,-56,17,Math.PI*1.05,Math.PI*1.95);ctx.fill(); // ผม
+  ctx.fillStyle='#24321f';const ex=o.dir*3;ctx.fillRect(-7+ex,-52,3.5,5);ctx.fillRect(4+ex,-52,3.5,5); // ตา
+  ctx.fillStyle=o.hat;ctx.beginPath();ctx.ellipse(0,-66,24,7,0,0,7);ctx.fill();ctx.beginPath();ctx.roundRect(-13,-80,26,15,6);ctx.fill(); // หมวก
+  ctx.restore();
+}
+function drawHouse(h,t){
+  const {x,y}=h; shadow(x,y+18,64);
+  ctx.fillStyle='#f4e6c8';ctx.strokeStyle='#5b4630';ctx.lineWidth=3;
+  ctx.beginPath();ctx.roundRect(x-55,y-45,110,62,6);ctx.fill();ctx.stroke();
+  ctx.fillStyle=h.roof;ctx.beginPath();ctx.moveTo(x-70,y-40);ctx.lineTo(x,y-98);ctx.lineTo(x+70,y-40);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.fillStyle='#8a5a32';ctx.beginPath();ctx.roundRect(x-12,y-18,24,35,[10,10,0,0]);ctx.fill();
+  ctx.fillStyle='#9fd3e8';ctx.fillRect(x-44,y-30,20,16);ctx.fillRect(x+24,y-30,20,16);
+  label(h.q.house_code,x,y+42,15);
+  const st=h.q.status==='done';
+  const by=y-118+(st?0:Math.sin(t*4)*4);
+  ctx.fillStyle=st?'#3d9a5b':'#f2b632';ctx.strokeStyle='#24321f';ctx.lineWidth=2.5;
+  ctx.beginPath();ctx.arc(x,by,14,0,7);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#fff';ctx.font='600 18px Mitr, sans-serif';ctx.textAlign='center';ctx.fillText(st?'✓':'!',x,by+6.5);
+  if(state.tracked===h.q.quest_id){ctx.strokeStyle='#4fa3e0';ctx.lineWidth=4;ctx.setLineDash([8,6]);ctx.beginPath();ctx.ellipse(x,y+22,80,26,0,0,7);ctx.stroke();ctx.setLineDash([])}
+}
+function drawTree(tr){
+  const {x,y,s}=tr; shadow(x,y,26*s);
+  ctx.fillStyle='#7a5434';ctx.fillRect(x-6*s,y-22*s,12*s,22*s);
+  ctx.fillStyle='#3e8a3f';ctx.beginPath();ctx.arc(x,y-46*s,30*s,0,7);ctx.fill();
+  ctx.fillStyle='#4fa24d';ctx.beginPath();ctx.arc(x-9*s,y-55*s,19*s,0,7);ctx.fill();
+}
+function drawBoard(n){
+  shadow(n.x,n.y,30);
+  ctx.fillStyle='#6b4426';ctx.fillRect(n.x-26,n.y-40,6,40);ctx.fillRect(n.x+20,n.y-40,6,40);
+  ctx.fillStyle='#a8743f';ctx.strokeStyle='#4a2f19';ctx.lineWidth=3;ctx.beginPath();ctx.roundRect(n.x-36,n.y-78,72,44,6);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#fffdf5';for(let i=0;i<3;i++)ctx.fillRect(n.x-28+i*20,n.y-72+(i%2)*6,15,20);
+  label(n.name,n.x,n.y-88,14,'#8a5a32');
+}
+function render(t){
+  const cw=VW/Z, ch=VH/Z;
+  cam.x=Math.max(0,Math.min(W-cw,player.x-cw/2)); cam.y=Math.max(0,Math.min(H-ch,player.y-ch/2));
+  if(cw>W) cam.x=(W-cw)/2; if(ch>H) cam.y=(H-ch)/2;
+  ctx.setTransform(DPR,0,0,DPR,0,0);ctx.fillStyle='#5aa152';ctx.fillRect(0,0,VW,VH);
+  ctx.setTransform(DPR*Z,0,0,DPR*Z,-cam.x*DPR*Z,-cam.y*DPR*Z);
+  ctx.fillStyle='#7cc06a';ctx.fillRect(0,0,W,H);
+  for(const d of decor){ if(d.t===0){ctx.fillStyle='#6db15c';ctx.fillRect(d.x,d.y,3,8);ctx.fillRect(d.x+5,d.y+2,3,6)} else {ctx.fillStyle=d.c;ctx.beginPath();ctx.arc(d.x,d.y,3.5,0,7);ctx.fill()} }
+  // ทางเดิน
+  ctx.strokeStyle='#d9c48f';ctx.lineWidth=26;ctx.lineCap='round';
+  for(const h of houses){ctx.beginPath();ctx.moveTo(PLAZA.x,PLAZA.y);ctx.quadraticCurveTo((PLAZA.x+h.x)/2,PLAZA.y+(h.y-PLAZA.y)*.2,h.x,h.y+30);ctx.stroke()}
+  // ลานกลาง
+  ctx.fillStyle='#e8dcb8';ctx.strokeStyle='#cbb98a';ctx.lineWidth=6;ctx.beginPath();ctx.ellipse(PLAZA.x,PLAZA.y,PLAZA.r*1.3,PLAZA.r,0,0,7);ctx.fill();ctx.stroke();
+  label('ลานกลางหมู่บ้าน',PLAZA.x,PLAZA.y+PLAZA.r-24,18,'#8a5a32');
+  // เรียงตามแกน y
+  const items=[...houses.map(h=>({y:h.y+18,f:()=>drawHouse(h,t)})),...trees.map(tr=>({y:tr.y,f:()=>drawTree(tr)})),
+    ...npcs.map(n=>({y:n.y,f:()=>{ if(n.id==='board')drawBoard(n); else {person(n.x,n.y,{shirt:n.shirt,hat:n.hat,dir:1},t);label(n.name,n.x,n.y-92,14,'#b2456e')} }})),
+    {y:player.y,f:()=>{person(player.x,player.y,{shirt:'#3f7cac',hat:'#2f8f6b',dir:player.dir,walking:player.walking},t);label('Lv'+lvl(state.exp).lv+' '+state.player,player.x,player.y-92,14)}}];
+  items.sort((a,b)=>a.y-b.y).forEach(i=>i.f());
+  // ลูกศรนำทาง
+  const tq=houses.find(h=>h.q.quest_id===state.tracked);
+  if(tq){const a=Math.atan2(tq.y-player.y,tq.x-player.x),d=Math.hypot(tq.y-player.y,tq.x-player.x);
+    if(d>140){ctx.save();ctx.translate(player.x+Math.cos(a)*60,player.y-30+Math.sin(a)*60);ctx.rotate(a);ctx.fillStyle='#4fa3e0';ctx.strokeStyle='#fff';ctx.lineWidth=3;
+      ctx.beginPath();ctx.moveTo(18,0);ctx.lineTo(-10,-12);ctx.lineTo(-4,0);ctx.lineTo(-10,12);ctx.closePath();ctx.stroke();ctx.fill();ctx.restore()}}
+  // ตัวเลขลอย
+  floats=floats.filter(f=>f.life>0);
+  for(const f of floats){ctx.globalAlpha=Math.min(1,f.life);label(f.text,f.x,f.y,22,f.color,'#fff');ctx.globalAlpha=1}
+  drawMini();
+}
+function drawMini(){
+  const s=208; mctx.clearRect(0,0,s,s);mctx.save();mctx.beginPath();mctx.arc(s/2,s/2,s/2,0,7);mctx.clip();
+  mctx.fillStyle='#9fd38c';mctx.fillRect(0,0,s,s);
+  const k=s/W, oy=(s-H*k)/2;
+  mctx.fillStyle='#e8dcb8';mctx.beginPath();mctx.ellipse(PLAZA.x*k,PLAZA.y*k+oy,PLAZA.r*1.3*k,PLAZA.r*k,0,0,7);mctx.fill();
+  for(const h of houses){mctx.fillStyle=h.q.status==='done'?'#3d9a5b':(state.tracked===h.q.quest_id?'#4fa3e0':'#d98a1c');mctx.fillRect(h.x*k-5,h.y*k+oy-5,10,10)}
+  mctx.fillStyle='#e2586a';mctx.strokeStyle='#fff';mctx.lineWidth=3;mctx.beginPath();mctx.arc(player.x*k,player.y*k+oy,7,0,7);mctx.fill();mctx.stroke();
+  mctx.restore();
+}
+
+// ===================== ลูป =====================
+let last=0;
+function loop(ts){
+  const t=ts/1000, dt=Math.min(.05,(ts-last)/1000||0); last=ts;
+  if(state.running && $('#modal').hidden){
+    let mx=(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0)+joy.x;
+    let my=(keys.s||keys.arrowdown?1:0)-(keys.w||keys.arrowup?1:0)+joy.y;
+    const m=Math.hypot(mx,my); if(m>1){mx/=m;my/=m}
+    const sp=240*dt; player.walking=m>.1;
+    if(player.walking){ if(Math.abs(mx)>.1) player.dir=mx>0?1:-1;
+      const nx=player.x+mx*sp, ny=player.y+my*sp;
+      if(!blocked(nx,player.y)) player.x=nx; if(!blocked(player.x,ny)) player.y=ny; }
+    const n=nearest(), btn=$('#act');
+    const txt=!n?'สำรวจ':n.type==='house'?(n.h.q.status==='done'?'ดูบ้าน':'ทำเควส'):n.type==='chair'?'คุย':'เปิดกระดาน';
+    if(btn.textContent!==txt) btn.textContent=txt; btn.dataset.on=n?'1':'0';
+  }
+  for(const f of floats){f.y-=40*dt;f.life-=dt*.8}
+  render(t);
+  requestAnimationFrame(loop);
+}
+
+// ===================== UI =====================
+function $(s){return document.querySelector(s)}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function baht(n){return (+n||0).toLocaleString('th-TH')+' ฿'}
+function lvl(exp){const lv=Math.floor(Math.sqrt(exp/40))+1,a=(lv-1)**2*40,b=lv**2*40;return{lv,cur:exp-a,need:b-a}}
+let toastT; function toast(m){const el=$('#toast');el.textContent=m;el.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),2600)}
+function updateHud(){
+  const L=lvl(state.exp);
+  $('#meName').textContent=state.player; $('#ava').textContent=state.player.trim().charAt(0)||'?';
+  $('#meLv').textContent='เลเวล '+L.lv+' · ปิดเควส '+state.quests.filter(q=>q.status==='done').length+'/'+state.quests.length;
+  $('#expBar').style.width=(L.cur/L.need*100)+'%'; $('#expTxt').textContent=L.cur+' / '+L.need;
+  const tg=+state.team.target||0;
+  $('#teamBar').style.width=(tg?Math.min(100,state.team.collected/tg*100):0)+'%';
+  $('#teamTxt').textContent=(+state.team.collected||0).toLocaleString('th-TH')+' / '+(tg?tg.toLocaleString('th-TH'):'-');
+}
+function openModal(html){$('#modalBody').innerHTML=html;$('#modal').hidden=false;keys.w=keys.a=keys.s=keys.d=false;const f=$('#modalBody').querySelector('button,input');f&&f.focus()}
+function closeModal(){$('#modal').hidden=true}
+$('#modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal()});
+
+function doAction(){
+  if(!$('#modal').hidden) return;
+  const n=nearest();
+  if(!n){toast('เดินไปใกล้บ้านที่มีเครื่องหมาย ! หรือคุยกับประธานกลุ่ม');return}
+  if(n.type==='house') questDialog(n.h.q);
+  else if(n.type==='chair') chairDialog();
+  else boardDialog();
+}
+$('#act').addEventListener('click',doAction);
+$('#btnList').addEventListener('click',boardDialog);
+
+function questDialog(q){
+  const done=q.status==='done';
+  openModal(`
+    <h2>${esc(q.house_code)}</h2><p class="sub">${esc(q.zone)} · รหัสเควส ${esc(q.quest_id)}</p>
+    <div class="kv"><b>ภารกิจ</b><span>${esc(q.task)}</span>
+      <b>ยอดงวดค้าง</b><span>${baht(q.owed)}</span>
+      ${q.last_note?`<b>บันทึกล่าสุด</b><span>${esc(q.last_note)}</span>`:''}</div>
+    ${done?`<p class="sub">เควสนี้ปิดแล้ว ถ้ามีความคืบหน้าใหม่ ให้ประธานเปิดเควสใหม่ในชีต</p>
+      <div class="row"><button class="btn" data-close>ปิด</button></div>`:`
+    <div class="opts" role="group" aria-label="ผลการติดตาม">
+      ${Object.entries(RESULTS).map(([k,r])=>`<button class="opt" data-r="${k}" aria-pressed="false">${r.label}<small>${r.hint} · +${r.exp} EXP</small></button>`).join('')}
+    </div>
+    <div id="amtWrap" hidden><label class="f" for="amt">จำนวนเงินที่ได้รับ (บาท)</label><input id="amt" type="number" inputmode="numeric" min="0" step="1"></div>
+    <label class="f" for="qnote">บันทึก (เช่น วันนัด เหตุผล)</label><textarea id="qnote" maxlength="300"></textarea>
+    <div class="err" id="qerr"></div>
+    <div class="row"><button class="btn" data-close>ยกเลิก</button><button class="btn pri" id="qsend" disabled>ส่งผลเควส</button></div>
+    <p class="note">คุยอย่างสุภาพ เก็บเรื่องหนี้เป็นความลับ ไม่บอกเพื่อนบ้าน และไม่ไปทวงนอกเวลา 08:00–20:00 น. (วันหยุด 08:00–18:00 น.)</p>`}`);
+  const body=$('#modalBody'); let pick=null;
+  body.querySelectorAll('[data-close]').forEach(b=>b.onclick=closeModal);
+  body.querySelectorAll('.opt').forEach(b=>b.onclick=()=>{
+    pick=b.dataset.r; body.querySelectorAll('.opt').forEach(o=>o.setAttribute('aria-pressed',o===b));
+    $('#amtWrap').hidden=pick!=='paid'; $('#qsend').disabled=false; if(pick==='paid')$('#amt').focus();
+  });
+  const send=$('#qsend'); if(!send) return;
+  send.onclick=async()=>{
+    const amount=pick==='paid'?Math.round(+$('#amt').value||0):0;
+    if(pick==='paid'&&amount<=0){$('#qerr').textContent='ใส่จำนวนเงินที่ได้รับ';return}
+    const note=$('#qnote').value.trim();
+    send.disabled=true; send.textContent='กำลังส่ง…'; $('#qerr').textContent='';
+    try{
+      const res=await api.submit({pin:state.pin,player:state.player,quest_id:q.quest_id,result:pick,amount,note});
+      if(!res.ok) throw new Error(res.error||'ส่งไม่สำเร็จ');
+      if(RESULTS[pick].close) q.status='done';
+      q.last_note=RESULTS[pick].label+(amount?` ${baht(amount)}`:'')+(note?` · ${note}`:'');
+      if(DEMO) store.set('vq-demo',{...(store.get('vq-demo')||{}),quests:state.quests});
+      state.exp=res.me.exp; if(res.team) state.team=res.team;
+      if(state.tracked===q.quest_id&&q.status==='done') state.tracked=null;
+      const h=houses.find(h=>h.q===q);
+      floats.push({text:'+'+RESULTS[pick].exp+' EXP',x:h.x,y:h.y-130,life:1.6,color:'#4fa3e0'});
+      if(amount) floats.push({text:'+'+baht(amount),x:h.x,y:h.y-100,life:1.8,color:'#3d9a5b'});
+      const before=lvl(state.exp-RESULTS[pick].exp).lv;
+      closeModal(); updateHud();
+      toast(lvl(state.exp).lv>before?'เลเวลอัป! ตอนนี้เลเวล '+lvl(state.exp).lv:'บันทึกลงชีตแล้ว: '+RESULTS[pick].label);
+    }catch(e){ send.disabled=false; send.textContent='ส่งผลเควส'; $('#qerr').textContent='ส่งไม่ได้: '+e.message+' ลองใหม่อีกครั้ง'; }
+  };
+}
+function boardDialog(){
+  const open=state.quests.filter(q=>q.status!=='done'), done=state.quests.length-open.length;
+  const dist=q=>{const h=houses.find(h=>h.q===q);return Math.hypot(h.x-player.x,h.y-player.y)};
+  const sorted=[...open].sort((a,b)=>dist(a)-dist(b)).concat(state.quests.filter(q=>q.status==='done'));
+  openModal(`<h2>กระดานเควส</h2><p class="sub">ค้าง ${open.length} · ปิดแล้ว ${done} · เรียงจากใกล้ที่สุด</p>
+    <div class="list">${sorted.map(q=>`<div class="li"><div class="t">${esc(q.house_code)} <span class="chip ${q.status==='done'?'done':'open'}">${q.status==='done'?'ปิดแล้ว':'ค้าง'}</span>
+      <small>${esc(q.zone)} · ${esc(q.task)}</small></div>${q.status==='done'?'':`<button class="go" data-q="${esc(q.quest_id)}">${state.tracked===q.quest_id?'กำลังนำทาง':'นำทาง'}</button>`}</div>`).join('')||'<p class="sub">ยังไม่มีเควส ให้ประธานเพิ่มแถวในชีต Quests</p>'}</div>
+    <div class="row"><button class="btn" data-close>ปิด</button>${DEMO?'':'<button class="btn" id="reload">ดึงข้อมูลใหม่</button>'}</div>`);
+  const b=$('#modalBody'); b.querySelector('[data-close]').onclick=closeModal;
+  b.querySelectorAll('.go').forEach(g=>g.onclick=()=>{state.tracked=g.dataset.q;closeModal();toast('ตามลูกศรสีฟ้าไปได้เลย')});
+  const rl=$('#reload'); if(rl) rl.onclick=async()=>{rl.disabled=true;await loadData();closeModal();toast('อัปเดตเควสจากชีตแล้ว')};
+}
+function chairDialog(){
+  const ps=[...state.team.players].sort((a,b)=>b.exp-a.exp);
+  const tg=+state.team.target||0, pct=tg?Math.round(state.team.collected/tg*100):0;
+  openModal(`<h2>ประธานกลุ่ม</h2><p class="sub">“ขอบใจที่ช่วยกันนะ ไปเยี่ยมด้วยความเข้าใจ บางบ้านลำบากจริง ส่งเรื่องมาให้กรรมการช่วยหาทางผ่อนได้”</p>
+    <div class="kv"><b>ยอดรับชำระเดือนนี้</b><span>${baht(state.team.collected)}</span><b>เป้าหมาย</b><span>${tg?baht(tg)+' ('+pct+'%)':'-'}</span></div>
+    <p class="sub" style="margin-bottom:6px">อันดับทีมงาน (EXP)</p>
+    <div class="list">${ps.map((p,i)=>`<div class="li"><div class="t">${i+1}. ${esc(p.name)}<small>เลเวล ${lvl(p.exp).lv}</small></div><b>${p.exp}</b></div>`).join('')}</div>
+    <div class="row"><button class="btn" data-close>ปิด</button></div>`);
+  $('#modalBody [data-close]').onclick=closeModal;
+}
+
+// ===================== เริ่มเกม =====================
+async function loadData(){
+  const res=await api.load(state.player,state.pin);
+  if(!res.ok) throw new Error(res.error||'โหลดข้อมูลไม่ได้');
+  const tracked=state.tracked;
+  state.quests=res.quests; state.exp=res.me.exp; state.team=res.team; state.tracked=tracked;
+  buildWorld(); updateHud();
+}
+$('#teamName').textContent=CONFIG.TEAM_NAME;
+$('#loginNote').textContent=DEMO?'ยังไม่ได้เชื่อม Google Sheet: ตอนนี้เป็นโหมดทดลองด้วยบ้านตัวอย่าง ไม่มีข้อมูลคนจริง ใส่รหัสอะไรก็ได้':'ข้อมูลลูกหนี้เป็นความลับของกลุ่ม ห้ามแคปหน้าจอส่งต่อ';
+$('#inName').value=store.get('vq-name')||'';
+$('#loginForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const name=$('#inName').value.trim(), pin=$('#inPin').value.trim();
+  if(!name){$('#loginErr').textContent='ใส่ชื่อก่อนนะ';return}
+  if(!DEMO&&!pin){$('#loginErr').textContent='ใส่รหัสทีม';return}
+  state.player=name; state.pin=pin; store.set('vq-name',name);
+  $('#btnStart').disabled=true; $('#btnStart').textContent='กำลังโหลด…'; $('#loginErr').textContent='';
+  try{
+    await loadData();
+    $('#login').hidden=true; $('#hud').hidden=false; $('#demoTag').hidden=!DEMO; state.running=true;
+    toast('เดินไปที่บ้านที่มี ! แล้วกดปุ่ม "ทำเควส"');
+  }catch(err){ $('#loginErr').textContent=err.message; $('#btnStart').disabled=false; $('#btnStart').textContent='เริ่มเควส'; }
+});
+state.quests=demoQuests(); buildWorld(); requestAnimationFrame(loop);
+</script>
+</body>
+</html>

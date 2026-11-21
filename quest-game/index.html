@@ -109,6 +109,13 @@ th{font-weight:500;color:var(--muted);background:var(--paper-2)}
 tr:last-child td{border-bottom:0}
 td .go{padding:3px 8px;font-size:12px}
 .filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:8px}
+.ylabel{font-size:13px;color:var(--muted);margin-bottom:4px}
+.ychips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.ybtn{border:2px solid var(--yc);background:#fff;color:var(--yc);border-radius:999px;padding:3px 12px;font-size:14px;font-weight:500}
+.ybtn[aria-pressed="true"]{background:var(--yc);color:#fff}
+.fchip{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(150px + env(safe-area-inset-bottom,0px));display:flex;align-items:center;gap:8px;max-width:calc(100% - 40px);box-sizing:border-box;background:rgba(36,50,31,.9);color:#fff;border-radius:999px;padding:5px 6px 5px 14px;font-size:13px}
+.fchip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.fchip button{flex:none;border:0;background:#fff;color:var(--ink);border-radius:50%;width:26px;height:26px;font-size:14px;padding:0}
 .peek-year{display:inline-block;color:#fff;font-size:22px;font-weight:600;border-radius:12px;padding:4px 14px;margin:6px 0 10px}
 .ychip{display:inline-block;color:#fff;border-radius:6px;padding:0 6px;font-size:12px}
 .chk{display:flex;align-items:center;gap:6px;font-size:13px;margin-bottom:8px}
@@ -137,7 +144,7 @@ td .go{padding:3px 8px;font-size:12px}
   </div>
   <div class="tr">
     <div class="zcol">
-      <button class="ibtn" id="btnList" aria-label="กระดานเควส">เควส</button>
+      <button class="ibtn" id="btnList" aria-label="ค้นหากลุ่ม">ค้นหา</button>
       <button class="ibtn" id="btnSum" aria-label="สรุปข้อมูลกลุ่ม">สรุป</button>
       <button class="ibtn" id="btnBook" aria-label="สมุดบันทึกในเครื่อง">สมุด<span class="badge" id="pendBadge" hidden>0</span></button>
       <button class="ibtn" id="zOut" aria-label="ซูมออก ดูภาพกว้าง">−</button>
@@ -147,6 +154,7 @@ td .go{padding:3px 8px;font-size:12px}
     <canvas id="mini" width="208" height="208" aria-label="แผนที่ย่อ"></canvas>
   </div>
   <div class="demo" id="demoTag" hidden>ข้อมูลตัวอย่าง</div>
+  <div class="fchip" id="fchip" hidden><span id="fchipTxt"></span><button id="fchipX" aria-label="ล้างตัวกรองแผนที่">✕</button></div>
   <div class="joy" id="joy" aria-hidden="true"><div class="knob" id="knob"></div></div>
   <button class="act" id="act" data-on="0">สำรวจ</button>
 </div>
@@ -403,7 +411,9 @@ function person(x,y,o,t){
 }
 const trunc=(s,n)=>s.length>n?s.slice(0,n-1)+'…':s;
 function drawHouse(h,t){
-  const {x,y,c}=h; shadow(x,y+16,56);
+  const {x,y,c}=h;
+  const dim=state.mapFilter&&!matchF(c,state.mapFilter); if(dim) ctx.globalAlpha=.18;
+  shadow(x,y+16,56);
   ctx.save();ctx.translate(x,y);ctx.scale(.85,.85);
   ctx.fillStyle='#f4e6c8';ctx.strokeStyle='#5b4630';ctx.lineWidth=3;
   ctx.beginPath();ctx.roundRect(-55,-45,110,62,6);ctx.fill();ctx.stroke();
@@ -428,6 +438,7 @@ function drawHouse(h,t){
   ctx.fillStyle=vis?'#3d9a5b':'#fff';ctx.font='600 16px Mitr, sans-serif';ctx.textAlign='center';ctx.fillText(paid?'★':vis?'✓':'!',0,6);
   ctx.restore();
   if(state.tracked===c.key){ctx.strokeStyle='#4fa3e0';ctx.lineWidth=4;ctx.setLineDash([8,6]);ctx.beginPath();ctx.ellipse(x,y+20,72,24,0,0,7);ctx.stroke();ctx.setLineDash([])}
+  ctx.globalAlpha=1;
 }
 function drawTree(tr){
   const {x,y,s}=tr; shadow(x,y,26*s);
@@ -502,7 +513,7 @@ function drawMini(){
   mctx.fillStyle='#9fd38c';mctx.fillRect(0,0,s,s);
   const k=Math.min(s/W,s/H)*.92, ox=(s-W*k)/2, oy=(s-H*k)/2;
   mctx.strokeStyle='#ddc995';mctx.lineWidth=3;for(const r of roads){mctx.beginPath();mctx.moveTo(r[0]*k+ox,r[1]*k+oy);mctx.lineTo(r[2]*k+ox,r[3]*k+oy);mctx.stroke()}
-  for(const h of houses){const c=h.c;mctx.fillStyle=state.tracked===c.key?'#ffffff':c.st.key==='paid'||visitedThisMonth(c)?'#3d9a5b':c.st.color;mctx.fillRect(h.x*k+ox-2.5,h.y*k+oy-2.5,5,5)}
+  for(const h of houses){const c=h.c;mctx.fillStyle=state.mapFilter&&!matchF(c,state.mapFilter)?'#b9d9ad':state.tracked===c.key?'#ffffff':c.st.key==='paid'||visitedThisMonth(c)?'#3d9a5b':c.st.color;mctx.fillRect(h.x*k+ox-2.5,h.y*k+oy-2.5,5,5)}
   mctx.fillStyle='#e2586a';mctx.strokeStyle='#fff';mctx.lineWidth=2.5;mctx.beginPath();mctx.arc(player.x*k+ox,player.y*k+oy,6,0,7);mctx.fill();mctx.stroke();
   mctx.restore();
 }
@@ -570,6 +581,8 @@ $('#act').addEventListener('click',doAction);
 $('#btnList').addEventListener('click',()=>boardDialog());
 $('#btnSum').addEventListener('click',summaryDialog);
 $('#btnBook').addEventListener('click',()=>journalDialog());
+$('#fchipX').addEventListener('click',()=>{state.mapFilter=null;updateFilterChip();toast('แสดงทุกบ้านแล้ว')});
+$('#fchipTxt').addEventListener('click',()=>boardDialog());
 addEventListener('online',()=>syncPending());
 $('#zOut').addEventListener('click',()=>setZoom(Z/1.25));
 $('#zIn').addEventListener('click',()=>setZoom(Z*1.25));
@@ -668,24 +681,69 @@ function tambonDialog(cl){
     <div class="row"><button class="btn" data-close>ปิด</button></div>`);
   bindNav($('#modalBody'));
 }
+// ===================== ค้นหา (ข้อความ / ปีงบ / ตำบล / สถานะ) =====================
+function hayOf(c){return c._hay||(c._hay=(c.project+' '+c.proposer+' '+c.contract+' '+c.vil+' ม.'+c.moo+' '+c.addr+' '+c.tambon).toLowerCase())}
+function matchF(c,f){
+  if(f.tb&&c.tambon!==f.tb) return false;
+  if(f.st&&c.st.key!==f.st) return false;
+  if(f.yrs&&f.yrs.length&&!f.yrs.includes(c.year)) return false;
+  if(f.todo&&!(needsVisit(c)&&!visitedThisMonth(c))) return false;
+  if(f.q){const h=hayOf(c);if(!f.q.toLowerCase().split(/\s+/).filter(Boolean).every(w=>h.includes(w)))return false}
+  return true;
+}
+function filterText(f){
+  const p=[];
+  if(f.yrs&&f.yrs.length) p.push('ปี'+f.yrs.map(yy).join(','));
+  if(f.tb) p.push('ต.'+f.tb);
+  if(f.st) p.push(ST[f.st].label);
+  if(f.q) p.push('"'+f.q+'"');
+  if(f.todo) p.push('ยังไม่เยี่ยม');
+  return p.join(' · ');
+}
+function filterActive(f){return !!(f&&(f.q||f.tb||f.st||f.todo||(f.yrs&&f.yrs.length)))}
+function updateFilterChip(){
+  const f=state.mapFilter, el=$('#fchip');
+  if(!filterActive(f)){el.hidden=true;return}
+  const n=state.contracts.filter(c=>matchF(c,f)).length;
+  $('#fchipTxt').textContent='แผนที่: '+filterText(f)+' ('+n+' หลัง)'; el.hidden=false;
+}
 function boardDialog(f){
-  f=f||state.filter||{tb:'',st:'',yr:'',todo:true};state.filter=f;
-  const list=state.contracts.filter(c=>(!f.tb||c.tambon===f.tb)&&(!f.st||c.st.key===f.st)&&(!f.yr||c.year===f.yr)&&(!f.todo||(needsVisit(c)&&!visitedThisMonth(c))))
-    .sort((a,b)=>byPriority(a,b)||(dist(a)-dist(b)));
-  openModal(`<h2>กระดานเควส</h2><p class="sub">${list.length} รายการ · เรียงจากด่วนที่สุด</p>
+  f=f||state.filter||{q:'',tb:'',st:'',yrs:[],todo:false};state.filter=f;
+  const years=Object.keys(yearColor);
+  openModal(`<h2>ค้นหากลุ่ม</h2>
+    <input id="fQ" type="search" placeholder="ชื่อโครงการ ชื่อผู้เสนอ เลขสัญญา หรือชื่อบ้าน" value="${esc(f.q)}" autocomplete="off" style="margin:6px 0 8px">
+    <div class="ylabel">ปีงบที่กู้ <small>(แตะได้หลายปี)</small></div>
+    <div class="ychips">${years.map(y=>`<button class="ybtn" data-y="${esc(y)}" aria-pressed="${f.yrs.includes(y)}" style="--yc:${yearColor[y]}">ปี${yy(y)}</button>`).join('')}</div>
     <div class="filters">
-      <select id="fTb" aria-label="ตำบล"><option value="">ทุกตำบล</option>${clusters.map(c=>`<option ${f.tb===c.name?'selected':''} value="${esc(c.name)}">ต.${esc(c.name)}</option>`).join('')}</select>
+      <select id="fTb" aria-label="ตำบล"><option value="">ทุกตำบล</option>${clusters.map(c=>`<option ${f.tb===c.name?'selected':''} value="${esc(c.name)}">ต.${esc(c.name)} (${c.items.length})</option>`).join('')}</select>
       <select id="fSt" aria-label="สถานะ"><option value="">ทุกสถานะ</option>${STATUS.map(s=>`<option ${f.st===s.key?'selected':''} value="${s.key}">${s.label}</option>`).join('')}</select>
-      <select id="fYr" aria-label="ปีงบประมาณ"><option value="">ทุกปีงบ</option>${Object.keys(yearColor).map(y=>`<option ${f.yr===y?'selected':''} value="${esc(y)}">ปีงบ ${esc(y)}</option>`).join('')}</select>
     </div>
     <label class="chk"><input type="checkbox" id="fTodo" ${f.todo?'checked':''}> เฉพาะที่ยังไม่ได้เยี่ยมเดือนนี้</label>
-    <div class="list">${list.slice(0,80).map(rowLi).join('')||'<p class="sub">ไม่มีรายการตามเงื่อนไขนี้</p>'}</div>
-    ${list.length>80?'<p class="note">แสดง 80 รายการแรก เลือกตำบลเพื่อดูเพิ่ม</p>':''}
+    <div id="fRes"></div>
+    <div class="row"><button class="btn" id="fClear">ล้างตัวกรอง</button><button class="btn pri" id="fMap">แสดงบนแผนที่</button></div>
     <div class="row"><button class="btn" data-close>ปิด</button>${GAS?'<button class="btn" id="reload">ดึงข้อมูลใหม่</button>':''}</div>`);
-  bindNav($('#modalBody'));
-  const re=()=>boardDialog({tb:$('#fTb').value,st:$('#fSt').value,yr:$('#fYr').value,todo:$('#fTodo').checked});
-  $('#fTb').onchange=re;$('#fSt').onchange=re;$('#fYr').onchange=re;$('#fTodo').onchange=re;
+  const body=$('#modalBody');
+  const read=()=>{f.q=$('#fQ').value.trim();f.tb=$('#fTb').value;f.st=$('#fSt').value;f.todo=$('#fTodo').checked;f.yrs=[...body.querySelectorAll('.ybtn[aria-pressed="true"]')].map(b=>b.dataset.y);state.filter=f};
+  const render=()=>{
+    read();
+    const list=state.contracts.filter(c=>matchF(c,f)).sort((a,b)=>byPriority(a,b)||(dist(a)-dist(b)));
+    const s=summarize(list);
+    $('#fRes').innerHTML=`<p class="sub" style="margin:4px 0">พบ <b>${list.length}</b> กลุ่ม · เงินกู้รวม ${baht(s.loan)} · เยี่ยมแล้วเดือนนี้ ${s.visited}/${s.need}</p>
+      ${list.length?statusBar(s):''}
+      ${f.tb?`<div class="row" style="margin:8px 0"><button class="btn" data-warp="${esc(f.tb)}">ขี่มอไซค์ไป ต.${esc(f.tb)}</button></div>`:''}
+      <div class="list" style="margin-top:8px">${list.slice(0,80).map(rowLi).join('')||'<p class="sub">ไม่พบกลุ่มตามเงื่อนไขนี้</p>'}</div>
+      ${list.length>80?'<p class="note">แสดง 80 รายการแรก เลือกปีหรือตำบลเพื่อให้แคบลง</p>':''}`;
+    bindNav($('#fRes'));
+  };
+  let t; $('#fQ').addEventListener('input',()=>{clearTimeout(t);t=setTimeout(render,200)});
+  $('#fTb').onchange=render;$('#fSt').onchange=render;$('#fTodo').onchange=render;
+  body.querySelectorAll('.ybtn').forEach(b=>b.onclick=()=>{b.setAttribute('aria-pressed',b.getAttribute('aria-pressed')!=='true');render()});
+  $('#fClear').onclick=()=>{state.filter={q:'',tb:'',st:'',yrs:[],todo:false};state.mapFilter=null;updateFilterChip();boardDialog()};
+  $('#fMap').onclick=()=>{read();state.mapFilter=filterActive(f)?JSON.parse(JSON.stringify(f)):null;updateFilterChip();closeModal();
+    if(state.mapFilter){setZoom(zMin());toast('บ้านที่ตรงเงื่อนไขจะเด่น ที่เหลือจะจางลง')}};
   const rl=$('#reload'); if(rl) rl.onclick=async()=>{rl.disabled=true;try{await loadData(true);closeModal();toast('อัปเดตข้อมูลจากชีตแล้ว')}catch(e){toast(e.message||String(e))}};
+  render();
+  if(!f.q) $('#fQ').blur();
 }
 function bossDialog(){
   const s=summarize(state.contracts);

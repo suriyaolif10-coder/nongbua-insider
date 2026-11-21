@@ -109,6 +109,8 @@ th{font-weight:500;color:var(--muted);background:var(--paper-2)}
 tr:last-child td{border-bottom:0}
 td .go{padding:3px 8px;font-size:12px}
 .filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:8px}
+.chk.scope{flex-wrap:wrap;background:var(--paper-2);border-radius:10px;padding:8px 10px;margin:8px 0}
+.chk.scope small{flex-basis:100%;color:var(--muted);font-size:12px;padding-left:22px}
 .ylabel{font-size:13px;color:var(--muted);margin-bottom:4px}
 .ychips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
 .ybtn{border:2px solid var(--yc);background:#fff;color:var(--yc);border-radius:999px;padding:3px 12px;font-size:14px;font-weight:500}
@@ -263,7 +265,18 @@ function resolveArea(list){
 }
 
 // ===================== สถานะเกม =====================
-const state={player:'',contracts:[],log:[],tracked:null,running:false};
+const state={player:'',all:[],contracts:[],log:[],tracked:null,running:false};
+// แสดงบนแผนที่เฉพาะกลุ่มที่ "เปิดโครงการ" (ค่าเริ่มต้น) · ระวัง: คำว่า "เปิด" มี "ปิด" อยู่ข้างใน
+const isClosed=c=>/ปิด/.test(c.proj)&&!/เปิด/.test(c.proj);
+state.onlyOpen=store.get('vq-onlyopen')??true;
+function applyScope(keepPos){
+  const px=player.x,py=player.y;
+  state.contracts=state.onlyOpen?state.all.filter(c=>!isClosed(c)):state.all.slice();
+  buildWorld(); resize();
+  if(keepPos) warpTo(px,py);
+  if(state.running){updateHud();updateFilterChip()}
+}
+function scopeText(){const n=state.all.filter(isClosed).length;return state.onlyOpen?'เฉพาะเปิดโครงการ'+(n?' (ซ่อนที่ปิดแล้ว '+n+' กลุ่ม)':''):'ทุกโครงการ (เปิดและปิด)'}
 let W=2400,H=1600;
 const player={x:0,y:0,dir:1,walking:false};
 const YEAR_COLORS=['#5b6abf','#1f8a9e','#2f8f6b','#7a9a1f','#c98a12','#c8553d','#b2456e','#7d4fb0','#5b4630','#3f7cac'];
@@ -651,7 +664,7 @@ function summaryDialog(){
   const s=summarize(state.contracts);
   const per=clusters.map(c=>({c,s:summarize(c.items)}));
   const years=[...new Set(state.contracts.map(c=>c.year))].sort();
-  openModal(`<h2>สรุปข้อมูลกลุ่มสตรี</h2><p class="sub">${esc(AREA||'ทุกพื้นที่')} · ทุกปีงบประมาณ${DEMO?' · ข้อมูลตัวอย่าง':''}</p>
+  openModal(`<h2>สรุปข้อมูลกลุ่มสตรี</h2><p class="sub">${esc(AREA||'ทุกพื้นที่')} · ทุกปีงบประมาณ · ${esc(scopeText())}${DEMO?' · ข้อมูลตัวอย่าง':''}</p>
     <div class="stats">
       <div class="stat"><b>${s.n}</b><span>สัญญา/กลุ่ม</span></div>
       <div class="stat"><b>${baht(s.loan)}</b><span>เงินกู้รวม</span></div>
@@ -711,6 +724,7 @@ function boardDialog(f){
   f=f||state.filter||{q:'',tb:'',st:'',yrs:[],todo:false};state.filter=f;
   const years=Object.keys(yearColor);
   openModal(`<h2>ค้นหากลุ่ม</h2>
+    <label class="chk scope"><input type="checkbox" id="fOpen" ${state.onlyOpen?'checked':''}> แผนที่แสดงเฉพาะกลุ่มที่<b>เปิดโครงการ</b><small>${esc(scopeText())}</small></label>
     <input id="fQ" type="search" placeholder="ชื่อโครงการ ชื่อผู้เสนอ เลขสัญญา หรือชื่อบ้าน" value="${esc(f.q)}" autocomplete="off" style="margin:6px 0 8px">
     <div class="ylabel">ปีงบที่กู้ <small>(แตะได้หลายปี)</small></div>
     <div class="ychips">${years.map(y=>`<button class="ybtn" data-y="${esc(y)}" aria-pressed="${f.yrs.includes(y)}" style="--yc:${yearColor[y]}">ปี${yy(y)}</button>`).join('')}</div>
@@ -735,6 +749,8 @@ function boardDialog(f){
       ${list.length>80?'<p class="note">แสดง 80 รายการแรก เลือกปีหรือตำบลเพื่อให้แคบลง</p>':''}`;
     bindNav($('#fRes'));
   };
+  $('#fOpen').onchange=()=>{state.onlyOpen=$('#fOpen').checked;store.set('vq-onlyopen',state.onlyOpen);applyScope(false);
+    toast(state.onlyOpen?'แผนที่แสดงเฉพาะกลุ่มที่เปิดโครงการ':'แผนที่แสดงทุกโครงการ');boardDialog(f)};
   let t; $('#fQ').addEventListener('input',()=>{clearTimeout(t);t=setTimeout(render,200)});
   $('#fTb').onchange=render;$('#fSt').onchange=render;$('#fTodo').onchange=render;
   body.querySelectorAll('.ybtn').forEach(b=>b.onclick=()=>{b.setAttribute('aria-pressed',b.getAttribute('aria-pressed')!=='true');render()});
@@ -901,12 +917,10 @@ function journalDialog(mk){
 // ===================== เริ่มเกม =====================
 async function loadData(keepPos){
   const res=await api.load();
-  const px=player.x,py=player.y;
-  state.contracts=resolveArea(res.rows.map(r=>parseRow(r.sheet,r.v)).filter(Boolean));
+  state.all=resolveArea(res.rows.map(r=>parseRow(r.sheet,r.v)).filter(Boolean));
   state.log=(res.log||[]).concat(journal.pending().map(j=>({ts:j.ts,player:j.player,key:j.key,result:j.result,amount:j.amount,appt:j.appt,note:j.note,exp:j.exp,pending:j.id})));
-  buildWorld(); resize();
+  applyScope(keepPos);
   setTimeout(syncPending,800);
-  if(keepPos) warpTo(px,py);
   updateHud();
 }
 $('#loginNote').textContent=DEMO

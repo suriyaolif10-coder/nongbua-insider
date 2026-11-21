@@ -39,6 +39,9 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px soli
 .me-row{display:flex;justify-content:space-between;font-size:11.5px;margin-top:3px;font-variant-numeric:tabular-nums;gap:8px}
 .tr{position:absolute;top:calc(10px + env(safe-area-inset-top,0px));right:calc(10px + env(safe-area-inset-right,0px));display:flex;gap:8px;align-items:flex-start}
 .ibtn{width:44px;height:44px;border-radius:12px;border:2px solid var(--ink);background:var(--paper);box-shadow:0 3px 0 var(--ink);font-size:13px;font-weight:500;line-height:1}
+.zcol{display:flex;flex-direction:column;gap:8px}
+#zOut,#zIn{font-size:24px}
+#zAll{font-size:11px}
 .ibtn:active{transform:translateY(2px);box-shadow:0 1px 0 var(--ink)}
 #mini{width:104px;height:104px;border-radius:50%;border:3px solid var(--gold);background:#9fd38c;box-shadow:0 3px 0 var(--ink)}
 .demo{position:absolute;top:calc(120px + env(safe-area-inset-top,0px));right:calc(10px + env(safe-area-inset-right,0px));
@@ -106,7 +109,10 @@ label.f{display:block;font-size:13px;color:var(--muted);margin:6px 0 4px}
     <div class="me-row"><span>ยอดทีมเดือนนี้</span><span id="teamTxt">0 / 0</span></div>
   </div>
   <div class="tr">
-    <button class="ibtn" id="btnList" aria-label="กระดานเควส">เควส</button>
+    <div class="zcol"><button class="ibtn" id="btnList" aria-label="กระดานเควส">เควส</button>
+      <button class="ibtn" id="zOut" aria-label="ซูมออก ดูภาพกว้าง">−</button>
+      <button class="ibtn" id="zIn" aria-label="ซูมเข้า">+</button>
+      <button class="ibtn" id="zAll" aria-label="ดูทั้งหมู่บ้าน">ทั้ง<br>แผนที่</button></div>
     <canvas id="mini" width="208" height="208" aria-label="แผนที่ย่อ"></canvas>
   </div>
   <div class="demo" id="demoTag" hidden>โหมดทดลอง</div>
@@ -237,6 +243,7 @@ function buildWorld(){
 const keys={};
 addEventListener('keydown',e=>{
   if(!$('#modal').hidden||!state.running) { if(e.key==='Escape') closeModal(); return; }
+  if(e.key==='-'){setZoom(Z/1.25);return} if(e.key==='='||e.key==='+'){setZoom(Z*1.25);return}
   keys[e.key.toLowerCase()]=true;
   if(e.key===' '||e.key==='Enter'||e.key.toLowerCase()==='e'){ e.preventDefault(); doAction(); }
 });
@@ -272,7 +279,12 @@ function nearest(){
 const cv=document.getElementById('game'), ctx=cv.getContext('2d');
 const mini=document.getElementById('mini'), mctx=mini.getContext('2d');
 let DPR=1,VW=0,VH=0,Z=1,cam={x:0,y:0};
-function resize(){DPR=Math.min(devicePixelRatio||1,2);VW=innerWidth;VH=innerHeight;cv.width=VW*DPR;cv.height=VH*DPR;Z=VW<700?.78:1}
+// ซูม: ค่าเริ่มต้นเป็นภาพกว้าง ปรับได้ด้วยปุ่ม +/− ล้อเมาส์ หรือปุ่ม - = บนคีย์บอร์ด
+let zoom=null;
+function zMin(){return Math.min(VW/W,VH/H)}           // เห็นทั้งหมู่บ้าน
+function zMax(){return VW<700?1.1:1.4}
+function setZoom(z){zoom=Math.max(zMin(),Math.min(zMax(),z));Z=zoom}
+function resize(){DPR=Math.min(devicePixelRatio||1,2);VW=innerWidth;VH=innerHeight;cv.width=VW*DPR;cv.height=VH*DPR;setZoom(zoom??(VW<700?.55:.7))}
 addEventListener('resize',resize); resize();
 
 function label(t,x,y,size,fill,stroke){
@@ -427,6 +439,10 @@ function doAction(){
 }
 $('#act').addEventListener('click',doAction);
 $('#btnList').addEventListener('click',boardDialog);
+$('#zOut').addEventListener('click',()=>setZoom(Z/1.25));
+$('#zIn').addEventListener('click',()=>setZoom(Z*1.25));
+$('#zAll').addEventListener('click',()=>{setZoom(Z<=zMin()+.001?(VW<700?.55:.7):zMin())});
+cv.addEventListener('wheel',e=>{e.preventDefault();setZoom(Z*(e.deltaY>0?.9:1.1))},{passive:false});
 
 function questDialog(q){
   const done=q.status==='done';
